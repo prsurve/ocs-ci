@@ -6,7 +6,7 @@ from ocs_ci.deployment.ibm import IBMDeployment
 from .aws import AWSIPI, AWSUPI, AWSUPIFlexy
 from .azure import AZUREIPI
 from .gcp import GCPIPI
-from .vmware import VSPHEREUPI
+from .vmware import VSPHEREUPI, VSPHEREIPI
 from .baremetal import BAREMETALUPI, BaremetalPSIUPI
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class DeploymentFactory(object):
             "baremetal_upi": BAREMETALUPI,
             "gcp_ipi": GCPIPI,
             "powervs_upi": IBMDeployment,
+            'vsphere_ipi': VSPHEREIPI,
         }
 
     def get_deployment(self):

@@ -1167,7 +1167,7 @@ def setup_local_storage(storageclass):
         logger.info("Creating LocalVolume CR")
         run_cmd(f"oc create -f {lv_data_yaml.name}")
     logger.info("Waiting 30 seconds for PVs to create")
-    storage_class_device_count = 1
+    storage_class_device_count = 4
     if platform == constants.AWS_PLATFORM:
         storage_class_device_count = 2
     verify_pvs_created(len(worker_names) * storage_class_device_count)

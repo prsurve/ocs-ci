@@ -224,21 +224,21 @@ class BAREMETALUPI(Deployment):
             else:
                 raise RhcosImageNotFound
             # Download metal_bios
-            metal_image_path = (
-                constants.coreos_url_prefix + image_data["metal_bios_url"]
-            )
-            if check_for_rhcos_images(metal_image_path):
-                cmd = (
-                    "wget -O "
-                    f"{self.helper_node_details['bm_path_to_upload']}"
-                    "/rhcos-metal.x86_64.raw.gz "
-                    f"{metal_image_path}"
-                )
-                assert self.helper_node_handler.exec_cmd(
-                    cmd=cmd
-                ), "Failed to Download required File"
-            else:
-                raise RhcosImageNotFound
+            # metal_image_path = (
+            #     constants.coreos_url_prefix + image_data["metal_bios_url"]
+            # )
+            # if check_for_rhcos_images(metal_image_path):
+            #     cmd = (
+            #         "wget -O "
+            #         f"{self.helper_node_details['bm_path_to_upload']}"
+            #         "/rhcos-metal.x86_64.raw.gz "
+            #         f"{metal_image_path}"
+            #     )
+            #     assert self.helper_node_handler.exec_cmd(
+            #         cmd=cmd
+            #     ), "Failed to Download required File"
+            # else:
+            #     raise RhcosImageNotFound
 
             if float_ocp_version >= 4.6:
                 # Download metal_bios
@@ -512,8 +512,7 @@ LABEL pxeboot
     MENU DEFAULT
     KERNEL rhcos-installer-kernel-x86_64
     APPEND ip=dhcp rd.neednet=1 initrd=rhcos-installer-initramfs.x86_64.img console=ttyS0 console=tty0 coreos.inst=yes \
-coreos.inst.install_dev=sda coreos.inst.image_url={bm_install_files_loc}\
-rhcos-metal.x86_64.raw.gz coreos.inst.ignition_url={bm_install_files_loc}{role}.ign \
+coreos.inst.install_dev=sda coreos.inst.ignition_url={bm_install_files_loc}{role}.ign \
 {extra_data}
 LABEL disk0
   MENU LABEL Boot disk (0x80)

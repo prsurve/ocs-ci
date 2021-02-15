@@ -476,7 +476,6 @@ class VSPHEREUPI(VSPHEREBASE):
                 f"{self.installer} create ignition-configs "
                 f"--dir {self.cluster_path} "
             )
-            exit(1)
 
         @retry(exceptions.CommandFailed, tries=10, delay=30, backoff=1)
         def configure_storage_for_image_registry(self, kubeconfig):
@@ -1042,7 +1041,7 @@ def add_var_folder():
         fd.write(var_data)
         fd.write('\nvariable "folder" {\n')
         fd.write("  type    = string\n")
-        fd.write("}\n")ipi_vmware
+        fd.write("}\n")
 
 
 def update_machine_conf(folder_structure=True):

@@ -109,7 +109,7 @@ class IPIOCPDeployment(BaseOCPDeployment):
                 f"{self.installer} create cluster "
                 f"--dir {self.cluster_path} "
                 f"--log-level {log_cli_level}",
-                timeout=install_timeout,
+                timeout=10800,
             )
         except (exceptions.CommandFailed, subprocess.TimeoutExpired) as e:
             if constants.GATHER_BOOTSTRAP_PATTERN in str(e):

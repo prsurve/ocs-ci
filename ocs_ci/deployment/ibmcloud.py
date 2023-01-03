@@ -340,7 +340,7 @@ class IBMCloudIPI(CloudDeploymentBase):
 
         """
         # retrieve ccoctl binary from https://mirror.openshift.com
-        version = config.DEPLOYMENT.get("ccoctl_version")
+        version = "4.12.0-rc.6"
         source = f"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{version}/ccoctl-linux.tar.gz"
         bin_dir = config.RUN["bin_dir"]
         tarball = os.path.join(bin_dir, "ccoctl-linux.tar.gz")

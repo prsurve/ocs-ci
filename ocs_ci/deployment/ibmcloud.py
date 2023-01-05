@@ -158,6 +158,8 @@ class IBMCloudIPI(CloudDeploymentBase):
         # IBM Cloud specific prereqs
         ibmcloud.login()
         self.configure_cloud_credential_operator()
+        import time
+        time.sleep(240)
         self.export_api_key()
         self.manually_create_iam_for_vpc()
 

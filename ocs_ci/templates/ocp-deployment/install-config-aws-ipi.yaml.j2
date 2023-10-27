@@ -1,4 +1,5 @@
 apiVersion: {{ api_version | default('v1') }}
+credentialsMode: Manual
 baseDomain: {{ base_domain | default('qe.rh-ocs.com') }}
 compute:
   - name: worker

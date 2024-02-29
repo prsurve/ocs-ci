@@ -1128,9 +1128,6 @@ def enable_managed_serviceaccount():
     """
     update MultiClusterEngine
 
-    - enabled: true
-        name: managedserviceaccount-preview
-
     """
     old_ctx = config.cur_index
     config.switch_ctx(get_active_acm_index())

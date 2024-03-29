@@ -2504,17 +2504,17 @@ class MultiClusterDROperatorsDeploy(object):
 
         """
 
-        # Create openshift-dr-system namespace
-        run_cmd_multicluster(
-            f"oc create -f {constants.OPENSHIFT_DR_SYSTEM_NAMESPACE_YAML} ",
-        )
-        self.deploy_dr_multicluster_orchestrator()
-        # create this only on ACM
-        run_cmd(
-            f"oc create -f {constants.OPENSHIFT_DR_SYSTEM_OPERATORGROUP}",
-        )
-        # HUB operator will be deployed by multicluster orechestrator
-        self.verify_dr_hub_operator()
+        # # Create openshift-dr-system namespace
+        # run_cmd_multicluster(
+        #     f"oc create -f {constants.OPENSHIFT_DR_SYSTEM_NAMESPACE_YAML} ",
+        # )
+        # self.deploy_dr_multicluster_orchestrator()
+        # # create this only on ACM
+        # run_cmd(
+        #     f"oc create -f {constants.OPENSHIFT_DR_SYSTEM_OPERATORGROUP}",
+        # )
+        # # HUB operator will be deployed by multicluster orechestrator
+        # self.verify_dr_hub_operator()
 
     def deploy_dr_multicluster_orchestrator(self):
         """
@@ -2909,10 +2909,10 @@ class RDRMultiClusterDROperatorsDeploy(MultiClusterDROperatorsDeploy):
         config.switch_acm_ctx()
         super().deploy()
         # RBD specific dr deployment
-        if self.rbd:
-            rbddops = RBDDRDeployOps()
-            self.configure_mirror_peer()
-            rbddops.deploy()
+        # if self.rbd:
+        # rbddops = RBDDRDeployOps()
+        # self.configure_mirror_peer()
+        # rbddops.deploy()
         self.deploy_dr_policy()
 
         # Enable cluster backup on both ACMs

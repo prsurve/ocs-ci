@@ -497,13 +497,13 @@ class CNVInstaller(object):
         Installs CNV enabling software emulation.
 
         """
-        logger.info("Installing CNV")
-        # Create CNV catalog source
-        self.create_cnv_catalog_source()
-        # Create openshift-cnv namespace
-        self.create_cnv_namespace()
-        # create CNV subscription
-        self.create_cnv_subscription()
+        # logger.info("Installing CNV")
+        # # Create CNV catalog source
+        # self.create_cnv_catalog_source()
+        # # Create openshift-cnv namespace
+        # self.create_cnv_namespace()
+        # # create CNV subscription
+        # self.create_cnv_subscription()
         # Deploy the HyperConverged CR
         self.deploy_hyper_converged()
         # Post CNV installation checks

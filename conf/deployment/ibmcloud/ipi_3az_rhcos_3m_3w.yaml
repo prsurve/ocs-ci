@@ -16,7 +16,7 @@ ENV_DATA:
     - 'us-east-1'
     - 'us-east-2'
     - 'us-east-3'
-  worker_replicas: 3
+  worker_replicas: 0
   master_replicas: 3
 
 # The following values need to be set in a separate config and passed to ocs-ci in

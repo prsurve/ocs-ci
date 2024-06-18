@@ -3460,6 +3460,96 @@ class MDRMultiClusterDROperatorsDeploy(MultiClusterDROperatorsDeploy):
         if version.compare_versions(f"{acm_version} >= 2.10"):
             logger.info("Skipping Enabling Managed ServiceAccount")
         else:
+            restic_pod_prefix = "restic"
+        restic_list = get_pods_having_label(
+            f"name={restic_pod_prefix}", constants.ACM_HUB_BACKUP_NAMESPACE
+        )
+        if len(restic_list) != constants.MDR_RESTIC_POD_COUNT:
+            raise MDRDeploymentException("restic pod count mismatch")
+        for pod in restic_list:
+            if pod["status"]["phase"] != "Running":
+                raise MDRDeploymentException("restic pod not in 'Running' phase")
+
+        # Check velero pod
+        veleropod = get_pods_having_label(
+            "app.kubernetes.io/name=velero", constants.ACM_HUB_BACKUP_NAMESPACE
+        )
+        if len(veleropod) != constants.MDR_VELERO_POD_COUNT:
+            raise MDRDeploymentException("Velero pod count mismatch")
+        if veleropod[0]["status"]["phase"] != "Running":
+            raise MDRDeploymentException("Velero pod not in 'Running' phase")
+
+        # Check backupstoragelocation resource in "Available" phase
+        backupstorage = ocp.OCP(
+            kind="BackupStorageLocation",
+            resource_name="default",
+            namespace=constants.ACM_HUB_BACKUP_NAMESPACE,
+        )
+        resource = backupstorage.get()
+        if resource["status"].get("phase") != "Available":
+            raise MDRDeploymentException(
+                "Backupstoragelocation resource is no in 'Avaialble' phase"
+            )
+        logger.info("Dataprotection application successful")
+
+    def create_generic_credentials(self):
+        s3_cred_str = (
+            "[default]\n"
+            f"aws_access_key_id={self.meta_obj.access_key}\n"
+            f"aws_secret_access_key={self.meta_obj.secret_key}\n"
+        )
+        cred_file = tempfile.NamedTemporaryFile(
+            mode="w+", prefix="s3_creds", delete=False
+        )
+        cred_file.write(s3_cred_str)
+        cred_file.flush()
+
+        cmd = (
+            f"oc create secret generic cloud-credentials --namespace {constants.ACM_HUB_BACKUP_NAMESPACE} "
+            f"--from-file cloud={cred_file.name}"
+        )
+        old_index = config.cur_index
+        # Create on all ACM clusters
+        for index in get_all_acm_indexes():
+            config.switch_ctx(index)
+            try:
+                run_cmd(f"oc create namespace {constants.ACM_HUB_BACKUP_NAMESPACE}")
+            except CommandFailed as ex:
+                if "already exists" in str(ex):
+                    logger.warning("Namespace already exists!")
+                else:
+                    raise
+            try:
+                run_cmd(cmd)
+            except CommandFailed:
+                logger.error("Failed to create generic secrets cloud-credentials")
+        config.switch_ctx(old_index)
+
+    def create_s3_bucket(self):
+        client = boto3.resource(
+            "s3",
+            verify=True,
+            endpoint_url="https://s3.amazonaws.com",
+            aws_access_key_id=self.meta_obj.access_key,
+            aws_secret_access_key=self.meta_obj.secret_key,
+        )
+        try:
+            client.create_bucket(
+                Bucket=self.meta_obj.bucket_name,
+                CreateBucketConfiguration={"LocationConstraint": constants.AWS_REGION},
+            )
+            logger.info(
+                f"Successfully created backup bucket: {self.meta_obj.bucket_name}"
+            )
+        except BotoCoreError as e:
+            logger.error(f"Failed to create s3 bucket {e}")
+            raise
+
+    def build_bucket_name(self):
+        bucket_name = "dr-"
+        for index in get_all_acm_indexes():
+            bucket_name += config.clusters[index].ENV_DATA["cluster_name"]
+        return bucket_name
             self.enable_managed_serviceaccount()
 
     def deploy_multicluster_orchestrator(self):

@@ -2390,19 +2390,19 @@ class Deployment(object):
                 )
         self.odf_deployments_check()
 
-        # Change monitoring backend to OCS
-        if config.ENV_DATA.get("monitoring_enabled") and config.ENV_DATA.get(
-            "persistent-monitoring"
-        ):
-            setup_persistent_monitoring()
-        elif config.ENV_DATA.get("monitoring_enabled") and config.ENV_DATA.get(
-            "telemeter_server_url"
-        ):
-            # Create configmap cluster-monitoring-config to reconfigure
-            # telemeter server url when 'persistent-monitoring' is False
-            create_configmap_cluster_monitoring_pod(
-                telemeter_server_url=config.ENV_DATA["telemeter_server_url"]
-            )
+        # # Change monitoring backend to OCS
+        # if config.ENV_DATA.get("monitoring_enabled") and config.ENV_DATA.get(
+        #     "persistent-monitoring"
+        # ):
+        #     setup_persistent_monitoring()
+        # elif config.ENV_DATA.get("monitoring_enabled") and config.ENV_DATA.get(
+        #     "telemeter_server_url"
+        # ):
+        #     # Create configmap cluster-monitoring-config to reconfigure
+        #     # telemeter server url when 'persistent-monitoring' is False
+        #     create_configmap_cluster_monitoring_pod(
+        #         telemeter_server_url=config.ENV_DATA["telemeter_server_url"]
+        #     )
 
         if not config.COMPONENTS["disable_cephfs"]:
             # Change registry backend to OCS CEPHFS RWX PVC
@@ -2490,7 +2490,7 @@ class Deployment(object):
                 )
 
         # patch gp2/thin storage class as 'non-default'
-        self.patch_default_sc_to_non_default()
+        # self.patch_default_sc_to_non_default()
         self.objectstore_user_check()
 
     def deploy_lvmo(self):

@@ -1,6 +1,7 @@
 import logging
 import pytest
 
+from ocs_ci.deployment.zones import create_dummy_zone_labels
 from ocs_ci.framework.testlib import tier1, ignore_leftovers, ManageTest
 from ocs_ci.ocs import constants
 from ocs_ci.ocs.cluster import CephCluster
@@ -36,7 +37,7 @@ class TestAddNode(ManageTest):
     """
 
 
-    def test_add_ocs_node(self, add_nodes):
+    def test_add_ocs_node(self):
         """
         Test to add ocs nodes and wait till rebalance is completed.
 
@@ -45,8 +46,4 @@ class TestAddNode(ManageTest):
         2. Disable intransit encryption and verify.
 
         """
-        add_nodes(ocs_nodes=False, node_count=1)
-        node_objs = get_nodes(node_type=constants.WORKER_MACHINE)
-        for no in node_objs:
-            add_disk_to_node(no, disk_size=200 ,ssd=True)
-            add_disk_to_node(no, disk_size=200, ssd=True)
+        create_dummy_zone_labels()

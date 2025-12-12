@@ -1,7 +1,7 @@
 apiVersion: ocs.openshift.io/v1alpha1
 kind: StorageClient
 metadata:
-  name: ocs-storagecluster
+  name: cs-bz-test
 spec:
   storageProviderEndpoint: {}
   onboardingTicket: {}

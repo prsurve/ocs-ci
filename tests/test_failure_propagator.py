@@ -22,6 +22,7 @@ from ocs_ci.framework.pytest_customization.marks import (
     scale,
     ocs_ci_utility,
 )
+from ocs_ci.utility.ssl_certs import configure_custom_ingress_cert
 
 log = logging.getLogger(__name__)
 
@@ -49,74 +50,9 @@ class TestFailurePropagator:
     Test class for failure propagator test case
     """
 
-    @pytest.mark.order("second_to_last")
-    def test_report_skip_triggering_test(self, request):
-        """
-        This test runs second to last and examines the skipped test cases of the execution.
-        In case of high rate of skipped tests due to Ceph health not OK, which indicates something went wrong
-        with the cluster during the execution, it will fail and report the potential test case that caused
-        this problematic state
-        """
-        number_of_eligible_tests = config.RUN.get("number_of_tests") - 2
-
-        # for acceptance suite, the value of config.RUN["skipped_on_ceph_health_threshold"] would be set to 0
-        # so any skip on Ceph health during an acceptance suite execution would cause
-        # test_report_skip_triggering_test to fail
-        if "acceptance" in config.RUN.get("cli_params").get("-m", ""):
-            config.RUN["skipped_on_ceph_health_threshold"] = 0
-
-        log.info(f"number_of_eligible_tests: {number_of_eligible_tests}")
-        log.info(
-            f"skipped_on_ceph_health_threshold: {config.RUN.get('skipped_on_ceph_health_threshold')}"
-        )
-        log.info(f"skip_reason_test_found: {config.RUN.get('skip_reason_test_found')}")
-        log.info(
-            f"skipped_tests_ceph_health: {config.RUN.get('skipped_tests_ceph_health')}"
-        )
-
-        if number_of_eligible_tests > 0:
-            config.RUN["skipped_on_ceph_health_ratio"] = round(
-                (
-                    config.RUN.get("skipped_tests_ceph_health")
-                    / number_of_eligible_tests
-                ),
-                3,
-            )
-            log.info(
-                f"skipped_on_ceph_health_ratio: {config.RUN.get('skipped_on_ceph_health_ratio')}"
-            )
-            message = (
-                f"This run had {config.RUN['skipped_on_ceph_health_ratio'] * 100}% of the "
-                f"tests skipped due to Ceph health not OK."
-            )
-            if (
-                config.RUN["skipped_on_ceph_health_ratio"]
-                > config.RUN["skipped_on_ceph_health_threshold"]
-            ):
-                if config.RUN.get("skip_reason_test_found"):
-                    test_name = config.RUN.get("skip_reason_test_found").get(
-                        "test_name"
-                    )
-                    message = (
-                        message
-                        + f" The test that is likely to cause this is {test_name}"
-                    )
-                    squad = config.RUN.get("skip_reason_test_found").get("squad")
-                    if squad:
-                        message = message + f" which is under {squad}'s responsibility"
-                        request.node.add_marker(squad)
-
-                else:
-                    message = (
-                        message + " Couldn't identify the test case that caused this"
-                    )
-                config.RUN["display_skipped_msg_in_email"] = message
-                pytest.fail(message)
-
-    @pytest.mark.order("last")
     def test_failure_propagator(self):
         """
         This test intention is to run last and propagate teardown failures caught during the test execution,
         so regular test cases won't false negatively fail
         """
-        pass
+        configure_custom_ingress_cert()

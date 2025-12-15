@@ -1588,27 +1588,27 @@ class VSPHEREIPI(VSPHEREBASE):
 
             logger.info("Deploying OCP cluster")
             logger.info(f"Openshift-installer will be using loglevel:{log_cli_level}")
-            try:
-                run_cmd(
-                    f"{self.installer} create cluster "
-                    f"--dir {self.cluster_path} "
-                    f"--log-level {log_cli_level}",
-                    timeout=7200,
-                )
-            except (CommandFailed, TimeoutExpired) as e:
-                if constants.GATHER_BOOTSTRAP_PATTERN in str(e):
-                    try:
-                        gather_bootstrap()
-                    except Exception as ex:
-                        logger.error(ex)
-                    raise e
-                if "Waiting up to" in str(e):
-                    run_cmd(
-                        f"{self.installer} wait-for install-complete "
-                        f"--dir {self.cluster_path} "
-                        f"--log-level {log_cli_level}",
-                        timeout=3600,
-                    )
+            # try:
+            #     run_cmd(
+            #         f"{self.installer} create cluster "
+            #         f"--dir {self.cluster_path} "
+            #         f"--log-level {log_cli_level}",
+            #         timeout=7200,
+            #     )
+            # except (CommandFailed, TimeoutExpired) as e:
+            #     if constants.GATHER_BOOTSTRAP_PATTERN in str(e):
+            #         try:
+            #             gather_bootstrap()
+            #         except Exception as ex:
+            #             logger.error(ex)
+            #         raise e
+            #     if "Waiting up to" in str(e):
+            #         run_cmd(
+            #             f"{self.installer} wait-for install-complete "
+            #             f"--dir {self.cluster_path} "
+            #             f"--log-level {log_cli_level}",
+            #             timeout=3600,
+            #         )
             self.test_cluster()
 
     def deploy_ocp(self, log_cli_level="DEBUG"):

@@ -4069,9 +4069,11 @@ def create_sub_app_private_repo_secret():
     )
     sub_app_private_repo_secret["metadata"]["name"] = constants.PRIVATE_REPO_SUB_SECRET
 
-    sub_app_private_repo_secret["data"]["accessToken"] = config.clusters[
-        get_active_acm_index()
-    ].AUTH["github_ibm_odf_qe_ocs_workloads"]["gh_token"]
+    sub_app_private_repo_secret["data"]["accessToken"] = base64.b64encode(
+        config.clusters[get_active_acm_index()]
+        .AUTH["github_ibm_odf_qe_ocs_workloads"]["gh_token"]
+        .encode()
+    ).decode()
     sub_app_private_repo_secret_yaml = tempfile.NamedTemporaryFile(
         mode="w+", prefix="sub_app_private", delete=False
     )

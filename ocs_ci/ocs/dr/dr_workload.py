@@ -40,6 +40,7 @@ from ocs_ci.ocs.resources.drpc import DRPC
 from ocs_ci.ocs.utils import (
     get_primary_cluster_config,
     get_non_acm_cluster_config,
+    get_active_acm_index,
     get_non_acm_cluster_and_non_provider_cluster_config,
 )
 from ocs_ci.utility import templating
@@ -88,9 +89,9 @@ class BusyBox(DRWorkload):
         workload_repo_branch = config.ENV_DATA["dr_workload_repo_branch"]
         workload_repo_login = config.ENV_DATA.get("dr_workload_repo_login")
         if workload_repo_login:
-            workload_repo_login = config.AUTH["github_ibm_odf_qe_ocs_workloads"][
-                "gh_token"
-            ]
+            workload_repo_login = config.clusters[get_active_acm_index()].AUTH[
+                "github_ibm_odf_qe_ocs_workloads"
+            ]["gh_token"]
         super().__init__(
             "busybox", workload_repo_url, workload_repo_branch, workload_repo_login
         )
@@ -728,9 +729,9 @@ class BusyBox_AppSet(DRWorkload):
         workload_repo_branch = config.ENV_DATA["dr_workload_repo_branch"]
         workload_repo_login = config.ENV_DATA.get("dr_workload_repo_login")
         if workload_repo_login:
-            workload_repo_login = config.AUTH["github_ibm_odf_qe_ocs_workloads"][
-                "gh_token"
-            ]
+            workload_repo_login = config.clusters[get_active_acm_index()].AUTH[
+                "github_ibm_odf_qe_ocs_workloads"
+            ]["gh_token"]
         super().__init__(
             "busybox", workload_repo_url, workload_repo_branch, workload_repo_login
         )
@@ -1086,9 +1087,9 @@ class CnvWorkload(DRWorkload):
         workload_repo_branch = config.ENV_DATA["dr_workload_repo_branch"]
         workload_repo_login = config.ENV_DATA.get("dr_workload_repo_login")
         if workload_repo_login:
-            workload_repo_login = config.AUTH["github_ibm_odf_qe_ocs_workloads"][
-                "gh_token"
-            ]
+            workload_repo_login = config.clusters[get_active_acm_index()].AUTH[
+                "github_ibm_odf_qe_ocs_workloads"
+            ]["gh_token"]
         super().__init__(
             "cnv", workload_repo_url, workload_repo_branch, workload_repo_login
         )
@@ -1494,9 +1495,9 @@ class BusyboxDiscoveredApps(DRWorkload):
         workload_repo_branch = config.ENV_DATA["dr_workload_repo_branch"]
         workload_repo_login = config.ENV_DATA.get("dr_workload_repo_login")
         if workload_repo_login:
-            workload_repo_login = config.AUTH["github_ibm_odf_qe_ocs_workloads"][
-                "gh_token"
-            ]
+            workload_repo_login = config.clusters[get_active_acm_index()].AUTH[
+                "github_ibm_odf_qe_ocs_workloads"
+            ]["gh_token"]
         super().__init__(
             "busybox", workload_repo_url, workload_repo_branch, workload_repo_login
         )
@@ -1964,9 +1965,9 @@ class CnvWorkloadDiscoveredApps(DRWorkload):
         workload_repo_branch = config.ENV_DATA["dr_workload_repo_branch"]
         workload_repo_login = config.ENV_DATA.get("dr_workload_repo_login")
         if workload_repo_login:
-            workload_repo_login = config.AUTH["github_ibm_odf_qe_ocs_workloads"][
-                "gh_token"
-            ]
+            workload_repo_login = config.clusters[get_active_acm_index()].AUTH[
+                "github_ibm_odf_qe_ocs_workloads"
+            ]["gh_token"]
         super().__init__(
             "cnv", workload_repo_url, workload_repo_branch, workload_repo_login
         )

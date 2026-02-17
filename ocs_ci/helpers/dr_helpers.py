@@ -10,6 +10,7 @@ from datetime import datetime
 
 import yaml
 
+from ocs_ci.deployment.fusion_data_foundation import FusionDataFoundationDeployment
 from ocs_ci.framework import config
 from ocs_ci.ocs import constants, ocp
 from ocs_ci.ocs.cluster import is_hci_cluster
@@ -2870,3 +2871,32 @@ def create_multiclusterservice_dr():
         .get("enabled")
     ), "Failed to update StorageCluster globalnet"
     validate_serviceexport()
+
+
+def setup_fdf_catsrc_for_hub():
+    """
+    This function creates fdf catalogsource on hub
+
+
+    """
+    restore_index = config.cur_index
+    logger.info("Getting FDF Catsrc from Primary")
+    with config.RunWithPrimaryConfigContext():
+        fdf_catsrc_data = ocp.OCP(
+            kind=constants.CATSRC,
+            namespace=constants.MARKETPLACE_NAMESPACE,
+            resource_name=constants.FDF_CATALOG_NAME,
+        )
+    acm_indexes = get_all_acm_indexes()
+    logger.info("Creating FDF specific resource")
+    for i in acm_indexes:
+        config.switch_ctx(i)
+        fdf = FusionDataFoundationDeployment
+        fdf.create_image_tag_mirror_set()
+        fdf.create_image_digest_mirror_set()
+    logger.info("Creating FDF Catsrc from Primary")
+    for i in acm_indexes:
+        config.switch_ctx(i)
+        wait_for_machineconfigpool_status("all", timeout=1800)
+        fdf_catsrc_data.create()
+    config.switch_ctx(restore_index)

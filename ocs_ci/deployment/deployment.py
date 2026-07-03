@@ -16,7 +16,7 @@ import base64
 import boto3
 import yaml
 
-from botocore.exceptions import EndpointConnectionError, BotoCoreError
+from botocore.exceptions import BotoCoreError, ClientError, EndpointConnectionError
 
 from ocs_ci.deployment.helpers import storage_class
 from ocs_ci.utility.azure_utils import AZURE as AzureUtil
@@ -3726,7 +3726,10 @@ class MultiClusterDROperatorsDeploy(object):
                 cluster_entry["clusterName"] = current_dr_clusters_list[1]
             index += 1
 
-        # Use unique cluster name to easily identify the managed clusters
+        # Use unique cluster name to easily identify the managed clusters.
+        # Name is derived from the participating cluster pair so each unique
+        # pair (e.g. multi-RDR with multiple dr_cluster_relations entries) gets
+        # its own MirrorPeer — e.g. "mirrorpeer-primary-secondary".
         mirror_peer_name = "mirrorpeer"
         for cluster_info in mirror_peer_data["spec"]["items"]:
             mirror_peer_name = mirror_peer_name + "-" + cluster_info["clusterName"]
@@ -3736,7 +3739,21 @@ class MultiClusterDROperatorsDeploy(object):
         # Current CTX: ACM
         # Just being explicit here to make code more readable
         config.switch_acm_ctx()
-        run_cmd(f"oc create -f {mirror_peer_yaml.name}")
+
+        # Check if this specific MirrorPeer already exists before creating.
+        # In a multi-RDR setup each cluster pair has a distinct name so
+        # checking by name is the correct granularity.
+        mirror_peer_obj = ocp.OCP(
+            kind="MirrorPeer",
+            resource_name=mirror_peer_name,
+            namespace=constants.DR_DEFAULT_NAMESPACE,
+        )
+        if mirror_peer_obj.is_exist():
+            logger.info(
+                f"MirrorPeer '{mirror_peer_name}' already exists — skipping creation"
+            )
+        else:
+            exec_cmd(f"oc create -f {mirror_peer_yaml.name}")
         self.validate_mirror_peer(mirror_peer_data["metadata"]["name"])
 
     def validate_mirror_peer(self, resource_name):
@@ -4031,7 +4048,22 @@ class MultiClusterDROperatorsDeploy(object):
         )
         templating.dump_data_to_temp_yaml(dr_policy_hub_data, dr_policy_hub_yaml.name)
         self.dr_policy_name = dr_policy_hub_data["metadata"]["name"]
-        run_cmd(f"oc create -f {dr_policy_hub_yaml.name}")
+
+        # Check if a DRPolicy with this exact name already exists before creating.
+        # Each cluster pair / dr_cluster_relations entry produces a distinct policy
+        # name so checking by name covers multi-pair (multi-RDR) setups correctly.
+        dr_policy_obj = ocp.OCP(
+            kind="DRPolicy",
+            resource_name=self.dr_policy_name,
+            namespace=constants.OPENSHIFT_DR_SYSTEM_NAMESPACE,
+        )
+        if dr_policy_obj.is_exist():
+            logger.info(
+                f"DRPolicy '{self.dr_policy_name}' already exists — skipping creation"
+            )
+        else:
+            exec_cmd(f"oc create -f {dr_policy_hub_yaml.name}")
+
         # Check the status of DRPolicy and wait for 'Reason' field to be set to 'Succeeded'
         dr_policy_resource = ocp.OCP(
             kind="DRPolicy",
@@ -4223,8 +4255,20 @@ class MultiClusterDROperatorsDeploy(object):
                     },
                 )
                 logger.info(f"Successfully created backup bucket: {bucket_name}")
+            except ClientError as e:
+                # BucketAlreadyOwnedByYou: bucket exists and belongs to this account
+                # BucketAlreadyExists: bucket exists under a different account
+                # Both are safe to treat as success on a re-run.
+                error_code = e.response["Error"]["Code"]
+                if error_code in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
+                    logger.warning(
+                        f"S3 bucket '{bucket_name}' already exists — skipping creation"
+                    )
+                else:
+                    logger.error(f"Failed to create s3 bucket: {e}")
+                    raise
             except BotoCoreError as e:
-                logger.error(f"Failed to create s3 bucket {e}")
+                logger.error(f"Failed to create s3 bucket: {e}")
                 raise
             return None
 
@@ -4301,8 +4345,23 @@ class MultiClusterDROperatorsDeploy(object):
                     raise
             try:
                 run_cmd(cmd)
-            except CommandFailed:
-                logger.error("Failed to create generic secrets cloud-credentials")
+            except CommandFailed as ex:
+                if "already exists" in str(ex):
+                    # Secret already present — delete and recreate so credentials
+                    # are always up to date on a re-run.
+                    logger.warning(
+                        "Secret 'cloud-credentials' already exists — replacing with current credentials"
+                    )
+                    exec_cmd(
+                        f"oc delete secret cloud-credentials "
+                        f"--namespace {constants.ACM_HUB_BACKUP_NAMESPACE} --ignore-not-found"
+                    )
+                    exec_cmd(cmd)
+                else:
+                    logger.error(
+                        f"Failed to create generic secret cloud-credentials: {ex}"
+                    )
+                    raise
 
         config.switch_ctx(old_index)
 
@@ -4385,7 +4444,9 @@ class MultiClusterDROperatorsDeploy(object):
             }
         oadp_yaml = tempfile.NamedTemporaryFile(mode="w+", prefix="oadp", delete=False)
         templating.dump_data_to_temp_yaml(oadp_data, oadp_yaml.name)
-        run_cmd(f"oc create -f {oadp_yaml.name}")
+        # Use apply so re-runs update the DPA config rather than failing with
+        # "already exists". DPA is safe to apply idempotently.
+        exec_cmd(f"oc apply -f {oadp_yaml.name}")
         # Validation
         self.validate_dpa()
 
@@ -4800,7 +4861,7 @@ class RDRMultiClusterDROperatorsDeploy(MultiClusterDROperatorsDeploy):
                         cluster.MULTICLUSTER["multicluster_index"]
                     ):
                         logger.info("Creating Resource DataProtectionApplication")
-                        run_cmd(f"oc create -f {constants.DPA_DISCOVERED_APPS_PATH}")
+                        exec_cmd(f"oc apply -f {constants.DPA_DISCOVERED_APPS_PATH}")
             return
         # Enable cluster backup on both ACMs
         for i in acm_indexes:
@@ -4860,7 +4921,7 @@ class RDRMultiClusterDROperatorsDeploy(MultiClusterDROperatorsDeploy):
             index = cluster.MULTICLUSTER["multicluster_index"]
             config.switch_ctx(index)
             logger.info("Creating Resource DataProtectionApplication")
-            run_cmd(f"oc create -f {constants.DPA_DISCOVERED_APPS_PATH}")
+            exec_cmd(f"oc apply -f {constants.DPA_DISCOVERED_APPS_PATH}")
         config.switch_acm_ctx()
         acm_version = get_acm_version()
         logger.info("Getting S3 Secret name from Ramen Config")
@@ -5091,7 +5152,7 @@ class MDRMultiClusterDROperatorsDeploy(MultiClusterDROperatorsDeploy):
             index = cluster.MULTICLUSTER["multicluster_index"]
             config.switch_ctx(index)
             logger.info("Creating Resource DataProtectionApplication")
-            run_cmd(f"oc create -f {constants.DPA_DISCOVERED_APPS_PATH}")
+            exec_cmd(f"oc apply -f {constants.DPA_DISCOVERED_APPS_PATH}")
         # Only on the active hub enable managedserviceaccount-preview
         config.switch_acm_ctx()
         acm_version = get_acm_version()

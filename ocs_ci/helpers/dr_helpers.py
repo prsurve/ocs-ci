@@ -3273,18 +3273,55 @@ def create_multiclusterservice_dr():
 
 def setup_fdf_catsrc_for_hub():
     """
-    This function creates fdf catalogsource on hub
+    Create or verify the FDF CatalogSource (isf-data-foundation-catalog) on the
+    ACM hub cluster.
 
+    If the CatalogSource already exists:
+      - Compare its installed image tag against the expected ``fdf_image_tag``
+        from ``DEPLOYMENT`` config.
+      - If tags match: skip creation and wait for READY state.
+      - If tags differ: log a warning and re-apply with the new tag so the
+        catalog is updated to the correct version.
+
+    If the CatalogSource does not exist: create it from scratch.
     """
     logger.info("Creating FDF specific resource")
 
     fdf = FusionDataFoundationDeployment()
     fdf.create_image_tag_mirror_set()
     fdf.create_image_digest_mirror_set()
-    logger.info("Creating FDF Catsrc from Primary")
+
+    expected_tag = config.DEPLOYMENT.get("fdf_image_tag")
+    logger.info(f"Expected FDF catalog image tag: {expected_tag}")
+
+    fdf_catalog_source = CatalogSource(
+        resource_name=constants.FDF_CATALOG_NAME,
+        namespace=constants.MARKETPLACE_NAMESPACE,
+    )
+
+    if fdf_catalog_source.is_exist():
+        installed_tag = fdf_catalog_source.get_image_name()
+        logger.info(
+            f"CatalogSource '{constants.FDF_CATALOG_NAME}' already exists "
+            f"with image tag: {installed_tag}"
+        )
+        if installed_tag == expected_tag:
+            logger.info(
+                f"Installed tag '{installed_tag}' matches expected tag — "
+                "skipping CatalogSource creation"
+            )
+            fdf_catalog_source.wait_for_state("READY")
+            return
+        else:
+            logger.warning(
+                f"Installed tag '{installed_tag}' differs from expected tag "
+                f"'{expected_tag}' — re-applying CatalogSource with new tag"
+            )
+
+    logger.info("Creating FDF CatalogSource from Primary")
     isf_data_foundation_catsrc = templating.load_yaml(constants.FDF_CATSRC_CR)
     isf_data_foundation_catsrc["spec"]["image"] = (
-        constants.FDF_CATSRC_IMAGE_PATH + ":" + config.DEPLOYMENT.get("fdf_image_tag")
+        constants.FDF_CATSRC_IMAGE_PATH + ":" + expected_tag
     )
     isf_data_foundation_catsrc_yaml = tempfile.NamedTemporaryFile(
         mode="w+", prefix="isf_df_catsrc", delete=False
@@ -3295,10 +3332,6 @@ def setup_fdf_catsrc_for_hub():
 
     wait_for_machineconfigpool_status("all", timeout=1800)
     run_cmd(f"oc apply -f {isf_data_foundation_catsrc_yaml.name}")
-    fdf_catalog_source = CatalogSource(
-        resource_name=constants.FDF_CATALOG_NAME,
-        namespace=constants.MARKETPLACE_NAMESPACE,
-    )
 
     logger.info("Waiting for CatalogSource to be READY")
     fdf_catalog_source.wait_for_state("READY")

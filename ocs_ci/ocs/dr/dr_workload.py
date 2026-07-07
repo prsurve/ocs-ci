@@ -2201,6 +2201,7 @@ class CnvWorkloadDiscoveredApps(DRWorkload):
                     namespace=self.workload_namespace,
                     discovered_apps=True,
                     workload_cleanup=True,
+                    vrg_name=self.discovered_apps_placement_name,
                 )
                 ocp_obj = ocp.OCP()
                 ocp_obj.delete_project(project_name=self.workload_namespace)

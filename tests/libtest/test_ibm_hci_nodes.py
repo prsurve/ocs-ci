@@ -326,6 +326,7 @@ class TestIBMHCINodeOperations:
         domain_suffix = ibm_hci_node.domain_suffix
 
         failed_nodes = []
+        checked_count = 0
 
         for rack_serial, rack_data in ibm_hci_obj.rack_details.items():
             rack_ip = rack_data.get("rackInfo", {}).get("rackIP")
@@ -337,8 +338,18 @@ class TestIBMHCINodeOperations:
             for node_role in nodes_dict:
                 node_name = f"{node_role}.{rack_serial}.{domain_suffix}"
                 logger.info(f"Checking power status (direct) for: {node_name}")
+                checked_count += 1
 
-                status = ibm_hci_obj.power_status_direct(node_name)
+                try:
+                    status = ibm_hci_obj.power_status_direct(node_name)
+                except RuntimeError as e:
+                    logger.error(
+                        f"power_status_direct raised RuntimeError for "
+                        f"{node_name}: {e}"
+                    )
+                    failed_nodes.append((node_name, str(e)))
+                    continue
+
                 logger.info(f"  {node_name} -> {status}")
 
                 if status not in ("on", "off"):
@@ -348,11 +359,18 @@ class TestIBMHCINodeOperations:
                     )
                     failed_nodes.append((node_name, status))
 
+        assert checked_count > 0, (
+            "No nodes were checked — rack_details is empty or all racks "
+            "are missing rackIP. Verify the rack-details JSON is populated."
+        )
         assert not failed_nodes, (
             "power_status_direct failed or returned unexpected status for "
             f"the following nodes: {failed_nodes}"
         )
-        logger.info("power_status_direct verified successfully for all nodes")
+        logger.info(
+            f"power_status_direct verified successfully for all "
+            f"{checked_count} node(s)"
+        )
 
 
 # Made with Bob

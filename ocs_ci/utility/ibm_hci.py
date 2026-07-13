@@ -2,6 +2,7 @@ import ipaddress
 import json
 import logging
 import os
+import shlex
 from pathlib import Path
 from paramiko import SSHClient, AutoAddPolicy
 
@@ -615,7 +616,12 @@ class IBMHCI(object):
             return False
 
         ipmi_cmd = ipmi_ops[operation]
-        command = f"ipmitool -I lanplus -H {formatted_ip} -U {node_username} -P {node_password} {ipmi_cmd}"
+        command = (
+            f"ipmitool -I lanplus -H {formatted_ip} "
+            f"-U {shlex.quote(node_username)} "
+            f"-P {shlex.quote(node_password)} "
+            f"{ipmi_cmd}"
+        )
 
         log.info(f"Executing IPMI command via SSH for {operation} on node {node_ip}")
         log.info(
@@ -708,7 +714,11 @@ class IBMHCI(object):
 
         # First, discover the Systems URI
         log.info(f"Discovering Redfish Systems URI for node {node_ip}")
-        discover_cmd = f"curl -k -sS -f -u {node_username}:{node_password} https://{formatted_ip}/redfish/v1/Systems"
+        discover_cmd = (
+            f"curl -k -sS -f -u "
+            f"{shlex.quote(node_username)}:{shlex.quote(node_password)} "
+            f"https://{formatted_ip}/redfish/v1/Systems"
+        )
         log.info(
             f"Redfish Discovery Command: curl -k -sS -f -u <REDACTED>:<REDACTED> "
             f"https://{formatted_ip}/redfish/v1/Systems"
@@ -750,7 +760,8 @@ class IBMHCI(object):
             if operation == "status":
                 # Get power status
                 command = (
-                    f"curl -k -sS -f -u {node_username}:{node_password} "
+                    f"curl -k -sS -f "
+                    f"-u {shlex.quote(node_username)}:{shlex.quote(node_password)} "
                     f"https://{formatted_ip}{system_uri} | grep -i powerstate"
                 )
                 redacted_command = (
@@ -760,7 +771,9 @@ class IBMHCI(object):
             else:
                 reset_type = redfish_ops[operation]
                 command = (
-                    f"curl -k -sS -f -u {node_username}:{node_password} -X POST "
+                    f"curl -k -sS -f "
+                    f"-u {shlex.quote(node_username)}:{shlex.quote(node_password)} "
+                    f"-X POST "
                     f"https://{formatted_ip}{system_uri}/Actions/ComputerSystem.Reset "
                     f"-H 'Content-Type: application/json' "
                     f'-d \'{{"ResetType": "{reset_type}"}}\''

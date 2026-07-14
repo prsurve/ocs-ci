@@ -54,8 +54,14 @@ class IBMHCI(object):
             )
             self._patch_rack_ips()
 
-        # Verify BMC connectivity for every node from the MGem.
-        # Raises NodeBMCUnreachableError if any node has no reachable IP.
+        # Nodes whose BMC could not be reached during init (missing rackIP or
+        # no ping response from any MGem).  Stored as "role.rack_serial" labels.
+        # Power operations on these nodes raise NodeBMCUnreachableError instead
+        # of attempting a doomed connection.
+        self._unreachable_nodes: set = set()
+
+        # Verify BMC connectivity for every node from the MGem.  Unreachable
+        # nodes are recorded in self._unreachable_nodes; construction continues.
         self._verify_bmc_connectivity()
 
     def _load_rack_details(self):

@@ -10,7 +10,6 @@ from ocs_ci.ocs.node import (
     wait_for_nodes_status,
 )
 from ocs_ci.ocs.platform_nodes import IBMHCINode
-from ocs_ci.utility.ibm_hci import IBMHCI
 
 logger = logging.getLogger(__name__)
 
@@ -316,19 +315,16 @@ class TestIBMHCINodeOperations:
         """
         logger.info("Test: Verify power_status_direct for all nodes after BMC ping")
 
-        # Instantiating IBMHCI runs _verify_bmc_connectivity internally —
-        # if BMC ping fails for any node, the constructor raises
-        # NodeBMCUnreachableError and the test fails here with a clear message.
-        ibm_hci_obj = IBMHCI()
-
-        # Derive domain suffix from IBMHCINode (reuses existing helper)
+        # IBMHCINode instantiates IBMHCI (which runs _verify_bmc_connectivity)
+        # and exposes it as .ibm_hci; reuse that instance instead of creating
+        # a separate IBMHCI().
         ibm_hci_node = IBMHCINode()
         domain_suffix = ibm_hci_node.domain_suffix
 
         failed_nodes = []
         checked_count = 0
 
-        for rack_serial, rack_data in ibm_hci_obj.rack_details.items():
+        for rack_serial, rack_data in ibm_hci_node.ibm_hci.rack_details.items():
             rack_ip = rack_data.get("rackInfo", {}).get("rackIP")
             if not rack_ip:
                 logger.warning(f"Skipping rack {rack_serial}: no rackIP available")
@@ -341,7 +337,7 @@ class TestIBMHCINodeOperations:
                 checked_count += 1
 
                 try:
-                    status = ibm_hci_obj.power_status_direct(node_name)
+                    status = ibm_hci_node.ibm_hci.power_status_direct(node_name)
                 except RuntimeError as e:
                     logger.error(
                         f"power_status_direct raised RuntimeError for "

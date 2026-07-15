@@ -1586,6 +1586,12 @@ def navigate_to_local_cluster(**kwargs):
         logger.info("Navigate to Local Cluster page. Click local cluster item")
         local_cluster_item.click()
     except TimeoutException:
+        current_url = SeleniumDriver().current_url
+        logger.warning(
+            f"'All Clusters' dropdown not found within {timeout}s "
+            f"(current URL: {current_url}). "
+            "Checking whether local-cluster page is already loaded."
+        )
         wait_for_element_to_be_visible(acm_page_loc["local-cluster_dropdown"], timeout)
 
 

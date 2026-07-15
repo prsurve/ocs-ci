@@ -1586,7 +1586,7 @@ def navigate_to_local_cluster(**kwargs):
         logger.info("Navigate to Local Cluster page. Click local cluster item")
         local_cluster_item.click()
     except TimeoutException:
-        wait_for_element_to_be_visible(acm_page_loc["local-cluster_dropdown"])
+        wait_for_element_to_be_visible(acm_page_loc["local-cluster_dropdown"], timeout)
 
 
 def navigate_to_all_clusters(**kwargs):

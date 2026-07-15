@@ -419,10 +419,10 @@ class CNVInstaller(object):
                 if sample == "healthy":
                     logger.info("HyperConverged cluster is healthy")
                     return
-        except exceptions.TimeoutExpiredError:
+        except exceptions.TimeoutExpiredError as exc:
             raise exceptions.TimeoutExpiredError(
                 f"HyperConverged did not reach 'healthy' status within {timeout}s"
-            )
+            ) from exc
 
     def check_hyperconverged_healthy(self, raise_exception=True):
         """

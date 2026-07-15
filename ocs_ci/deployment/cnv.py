@@ -407,20 +407,22 @@ class CNVInstaller(object):
             f"Waiting up to {timeout}s for HyperConverged systemHealthStatus to become 'healthy'"
         )
         ocp = OCP(kind=constants.HYPERCONVERGED, namespace=self.namespace)
-        for sample in TimeoutSampler(
-            timeout=timeout,
-            sleep=sleep,
-            func=lambda: ocp.get(resource_name=constants.KUBEVIRT_HYPERCONVERGED)
-            .get("status", {})
-            .get("systemHealthStatus"),
-        ):
-            logger.info(f"HyperConverged systemHealthStatus: {sample}")
-            if sample == "healthy":
-                logger.info("HyperConverged cluster is healthy")
-                return
-        raise exceptions.TimeoutExpiredError(
-            f"HyperConverged did not reach 'healthy' status within {timeout}s"
-        )
+        try:
+            for sample in TimeoutSampler(
+                timeout=timeout,
+                sleep=sleep,
+                func=lambda: ocp.get(resource_name=constants.KUBEVIRT_HYPERCONVERGED)
+                .get("status", {})
+                .get("systemHealthStatus"),
+            ):
+                logger.info(f"HyperConverged systemHealthStatus: {sample}")
+                if sample == "healthy":
+                    logger.info("HyperConverged cluster is healthy")
+                    return
+        except exceptions.TimeoutExpiredError:
+            raise exceptions.TimeoutExpiredError(
+                f"HyperConverged did not reach 'healthy' status within {timeout}s"
+            )
 
     def check_hyperconverged_healthy(self, raise_exception=True):
         """

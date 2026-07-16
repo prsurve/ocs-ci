@@ -1943,6 +1943,16 @@ acm_configuration_4_22 = {
         "//span[contains(@class,'c-modal-box__title-text')]",
         By.XPATH,
     ),
+    # OCP 4.22 PF6: after creating a cluster set the success modal has a
+    # "Manage resource assignments" button. In PF6 the button text lives inside
+    # a <span class="pf-v6-c-button__text"> child, so normalize-space() on the
+    # <button> element itself returns empty and the base locator misses it.
+    # Add a .// descendant text search as a fallback.
+    "click-manage-resource-assignments": (
+        "//button[normalize-space()='Manage resource assignments'] | "
+        "//button[.//*[normalize-space()='Manage resource assignments']]",
+        By.XPATH,
+    ),
 }
 
 add_capacity = {

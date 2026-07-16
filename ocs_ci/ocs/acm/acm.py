@@ -268,7 +268,32 @@ class AcmAddClusters(AcmPageNavigator):
         self.do_send_keys(self.page_nav["cluster-set-name"], text=cluster_set_name)
         log.info("Click on Create")
         self.do_click(self.page_nav["click-create"], enable_screenshot=True)
-        time.sleep(1)
+        # In PF6 the submit button transitions through pf-m-in-progress (spinner,
+        # disabled) while the cluster set API call is in flight. The modal stays
+        # open and only shows "Manage resource assignments" once the creation
+        # completes. Wait up to 60 s for the in-progress state to clear before
+        # clicking the next button, instead of a fixed sleep that races the API.
+        log.info(
+            "Waiting for cluster set creation to complete "
+            "(submit button to leave pf-m-in-progress state)"
+        )
+        try:
+            WebDriverWait(self.driver, 60).until_not(
+                ec.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        "//button[contains(@class,'pf-m-in-progress')]"
+                        "[.//*[normalize-space()='Creating'] or "
+                        "normalize-space()='Creating']",
+                    )
+                )
+            )
+            log.info("Cluster set creation completed")
+        except Exception:
+            log.warning(
+                "Timed out waiting for in-progress state to clear; "
+                "proceeding to click 'Manage resource assignments'"
+            )
         log.info("Click on Manage resource assignments")
         self.do_click(
             self.page_nav["click-manage-resource-assignments"], enable_screenshot=True
@@ -758,10 +783,13 @@ def login_to_acm():
     locator = ["click-local-cluster", "click-admin-dropdown"]
     expected_text = ["local-cluster", "Administrator"]
     for expected_text, locator in zip(expected_text, locator):
+        # use_fallback=False: a timeout here is the expected "not found"
+        # outcome for the alternative branch — suppress AI fallback noise.
         dropdown_found = page_nav.wait_until_expected_text_is_found(
             locator=page_nav.acm_page_nav[locator],
             expected_text=expected_text,
             timeout=15,
+            use_fallback=False,
         )
         if dropdown_found:
             log.info(

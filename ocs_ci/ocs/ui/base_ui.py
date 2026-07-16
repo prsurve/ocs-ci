@@ -794,7 +794,9 @@ class BaseUI:
         element.send_keys(Keys.CONTROL, "a")
         element.send_keys(Keys.DELETE)
 
-    def wait_until_expected_text_is_found(self, locator, expected_text, timeout=60):
+    def wait_until_expected_text_is_found(
+        self, locator, expected_text, timeout=60, use_fallback=True
+    ):
         """
         Method to wait for a expected text to appear on the UI (use of explicit wait type),
         this method is helpful in working with elements which appear on completion of certain action and
@@ -804,6 +806,10 @@ class BaseUI:
             locator (tuple): (GUI element needs to operate on (str), type (By))
             expected_text (str): Text which needs to be searched on UI
             timeout (int): Looks for a web element repeatedly until timeout (sec) occurs
+            use_fallback (bool): If True, attempt AI locator fallback on TimeoutException.
+                Set to False when this method is used as a probe/detection call where a
+                timeout is the expected "not found" outcome — avoids spurious fallback
+                activation noise in the logs.
 
         Returns:
             bool: Returns True if the expected element text is found, False otherwise
@@ -826,19 +832,20 @@ class BaseUI:
             logger.warning(
                 f"Locator {locator[1]} {locator[0]} did not find text {expected_text}"
             )
-            new_locator = self.locator_fallback.attempt_fallback(
-                locator, "wait_text", stack_trace=traceback.format_exc()
-            )
-            if new_locator:
-                try:
-                    WebDriverWait(self.driver, min(timeout, 10)).until(
-                        ec.text_to_be_present_in_element(
-                            (new_locator[1], new_locator[0]), expected_text
+            if use_fallback:
+                new_locator = self.locator_fallback.attempt_fallback(
+                    locator, "wait_text", stack_trace=traceback.format_exc()
+                )
+                if new_locator:
+                    try:
+                        WebDriverWait(self.driver, min(timeout, 10)).until(
+                            ec.text_to_be_present_in_element(
+                                (new_locator[1], new_locator[0]), expected_text
+                            )
                         )
-                    )
-                    return True
-                except TimeoutException:
-                    pass
+                        return True
+                    except TimeoutException:
+                        pass
             return False
 
     def check_element_presence(self, locator, timeout=5, use_fallback=True):

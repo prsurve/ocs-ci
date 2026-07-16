@@ -271,14 +271,15 @@ class AcmAddClusters(AcmPageNavigator):
         # In PF6 the submit button transitions through pf-m-in-progress (spinner,
         # disabled) while the cluster set API call is in flight. The modal stays
         # open and only shows "Manage resource assignments" once the creation
-        # completes. Wait up to 60 s for the in-progress state to clear before
+        # completes. Wait up to 300 s for the in-progress state to clear before
         # clicking the next button, instead of a fixed sleep that races the API.
+        # On a loaded cluster the creation API can take well over 60 s.
         log.info(
             "Waiting for cluster set creation to complete "
-            "(submit button to leave pf-m-in-progress state)"
+            "(submit button to leave pf-m-in-progress state, timeout=300s)"
         )
         try:
-            WebDriverWait(self.driver, 60).until_not(
+            WebDriverWait(self.driver, 300).until_not(
                 ec.presence_of_element_located(
                     (
                         By.XPATH,

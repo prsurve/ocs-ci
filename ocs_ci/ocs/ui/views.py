@@ -1900,12 +1900,20 @@ acm_configuration_4_22 = {
         "//nav[@aria-label='Breadcrumb']//a[contains(@href,'/multicloud/infrastructure/clusters')]",
         By.XPATH,
     ),
-    # OCP 4.22 PF6: the "Create cluster set" modal input may use an id attribute instead of
-    # (or in addition to) the placeholder text used in PF4.
-    # ACM upstream uses id="clusterSetName" on this input; keep the placeholder as a fallback.
+    # OCP 4.22 PF6: the "Create cluster set" modal input.
+    # Multiple fallbacks in order of specificity:
+    #   1. id="clusterSetName" — used in ACM 2.x with PF6
+    #   2. placeholder text — used in older ACM/PF4 builds
+    #   3. aria-label — an alternative attribute seen in some ACM builds
+    #   4. any text input inside a modal dialog — broadest catch-all
     "cluster-set-name": (
         "//input[@id='clusterSetName'] | "
-        "//input[@placeholder='Enter cluster set name']",
+        "//input[@placeholder='Enter cluster set name'] | "
+        "//input[@aria-label='cluster set name' or "
+        "@aria-label='Cluster set name' or "
+        "@aria-label='Enter cluster set name'] | "
+        "//*[contains(@class,'modal') or contains(@class,'Modal')]"
+        "//input[@type='text']",
         By.XPATH,
     ),
     # OCP 4.22 PF6: PatternFly 6 renames CSS classes from pf-c-button/pf-m-* to pf-v6-c-button/pf-m-*.

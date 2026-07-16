@@ -219,7 +219,43 @@ class AcmAddClusters(AcmPageNavigator):
         self.do_click(self.page_nav["cluster-sets"])
         self.page_has_loaded(retries=15, sleep_time=5)
         log.info("Click on Create cluster set")
+        # In PF6 ACM (OCP 4.22+) the button uses aria-disabled (not the HTML
+        # disabled attribute) when the page is still loading or the user lacks
+        # permissions. Selenium's element_to_be_clickable does NOT detect
+        # aria-disabled, so clicking it silently does nothing and the modal
+        # never opens. Wait up to 60 s for the button to become enabled before
+        # clicking; raise a clear error only if it never becomes enabled.
+        log.info("Waiting for 'Create cluster set' button to become enabled")
+        create_btn_wait = 60
+        create_btn_interval = 5
+        elapsed = 0
+        while elapsed < create_btn_wait:
+            create_btn_elements = self.get_elements(self.page_nav["create-cluster-set"])
+            if create_btn_elements:
+                aria_disabled = create_btn_elements[0].get_attribute("aria-disabled")
+                if not aria_disabled or aria_disabled.lower() != "true":
+                    log.info("'Create cluster set' button is enabled")
+                    break
+                log.warning(
+                    f"'Create cluster set' button still aria-disabled, "
+                    f"retrying in {create_btn_interval}s "
+                    f"({elapsed}/{create_btn_wait}s elapsed)"
+                )
+            time.sleep(create_btn_interval)
+            elapsed += create_btn_interval
+        else:
+            raise PermissionError(
+                "The 'Create cluster set' button remained aria-disabled=true "
+                f"after {create_btn_wait}s. The logged-in user likely lacks "
+                "permission to create cluster sets. Ensure the user has the "
+                "'open-cluster-management:cluster-manager-admin' ClusterRole."
+            )
         self.do_click(self.page_nav["create-cluster-set"])
+        # Allow the "Create cluster set" modal to fully render before interacting
+        # with the name input — without this the modal may still be animating when
+        # do_send_keys runs, causing page_has_loaded() to be triggered and the
+        # modal to be dismissed before the element is found.
+        time.sleep(3)
         global cluster_set_name
         cluster_set_name = config.ENV_DATA.get(
             "cluster_set"

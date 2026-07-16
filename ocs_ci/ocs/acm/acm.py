@@ -221,12 +221,16 @@ class AcmAddClusters(AcmPageNavigator):
         log.info("Click on Create cluster set")
         # In PF6 ACM (OCP 4.22+) the button uses aria-disabled (not the HTML
         # disabled attribute) when the page is still loading or the user lacks
-        # permissions. Selenium's element_to_be_clickable does NOT detect
+        # permissions. This is commonly observed when ACM is under high load
+        # and the cluster sets data has not yet been fetched — the button
+        # starts aria-disabled and becomes enabled once the API response
+        # arrives. Selenium's element_to_be_clickable does NOT detect
         # aria-disabled, so clicking it silently does nothing and the modal
-        # never opens. Wait up to 60 s for the button to become enabled before
-        # clicking; raise a clear error only if it never becomes enabled.
+        # never opens. Wait up to 4 min for the button to become enabled;
+        # raise a clear error only if it never becomes enabled (likely a real
+        # permissions issue rather than a transient loading delay).
         log.info("Waiting for 'Create cluster set' button to become enabled")
-        create_btn_wait = 60
+        create_btn_wait = 240
         create_btn_interval = 5
         elapsed = 0
         while elapsed < create_btn_wait:

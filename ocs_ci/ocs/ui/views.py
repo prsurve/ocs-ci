@@ -1854,24 +1854,32 @@ acm_configuration_4_21 = {
 }
 
 acm_configuration_4_22 = {
-    # OCP 4.22 uses PF6 UI: cluster switcher is a button with data-test-id, not a PF4 menu-toggle
+    # OCP 4.22 PF6: "All Clusters" dropdown was replaced by the perspective switcher
+    # (data-test-id="perspective-switcher-toggle"), which shows "Fleet management" when in the
+    # ACM multicluster view. Earlier versions used an <a> or PF4 c-menu-toggle__text span.
+    # Both alternatives are kept for backward compatibility with lower ACM/OCP versions.
     "all-clusters_dropdown": (
-        "//button[@data-test-id='cluster-dropdown-toggle']",
+        "//a[normalize-space()='All Clusters'] | "
+        "//span[contains(@class, 'c-menu-toggle__text') and normalize-space()='All Clusters']/.. | "
+        "//button[@data-test-id='perspective-switcher-toggle']",
         By.XPATH,
     ),
-    # OCP 4.22 uses PF6 UI: local cluster view shows "Core platform" h2 in the sidebar nav
+    # OCP 4.22 PF6: after clicking the perspective switcher the menu lists perspectives;
+    # local-cluster appears as text inside the switcher menu items.
+    # Older versions used PF4 c-menu__item-text spans or the Administrator h2.
+    "local-cluster_dropdown_item": (
+        "//span[contains(@class, 'c-menu__item-text') and text()='local-cluster']/.. | "
+        "//h2[normalize-space()='Administrator'] | "
+        "//button[@data-test-id='perspective-switcher-toggle']//*[normalize-space()='local-cluster']",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: once on local-cluster view the switcher h2 shows "local-cluster",
+    # or the Administrator nav heading is visible. Older versions used h2/span with Fleet Management.
     "local-cluster_dropdown": (
         "//h2[text()='local-cluster'] | "
-        "//span[contains(@class, 'c-menu-toggle__text') "
-        "and text()='local-cluster']/.. | "
+        "//span[contains(@class, 'c-menu-toggle__text') and text()='local-cluster']/.. | "
         "//h2[normalize-space()='Fleet Management'] | "
-        "//h2[normalize-space()='Core platform']",
-        By.XPATH,
-    ),
-    # OCP 4.22 PF6: after clicking the cluster switcher the item is a button/link under the dropdown
-    "local-cluster_dropdown_item": (
-        "//button[@data-test-id='cluster-dropdown-toggle']//*[text()='local-cluster'] | "
-        "//span[contains(@class, 'c-menu__item-text') and text()='local-cluster']/.. | "
+        "//h2[normalize-space()='Core platform'] | "
         "//h2[normalize-space()='Administrator']",
         By.XPATH,
     ),

@@ -1854,6 +1854,11 @@ acm_configuration_4_21 = {
 }
 
 acm_configuration_4_22 = {
+    # OCP 4.22 uses PF6 UI: cluster switcher is a button with data-test-id, not a PF4 menu-toggle
+    "all-clusters_dropdown": (
+        "//button[@data-test-id='cluster-dropdown-toggle']",
+        By.XPATH,
+    ),
     # OCP 4.22 uses PF6 UI: local cluster view shows "Core platform" h2 in the sidebar nav
     "local-cluster_dropdown": (
         "//h2[text()='local-cluster'] | "
@@ -1861,6 +1866,13 @@ acm_configuration_4_22 = {
         "and text()='local-cluster']/.. | "
         "//h2[normalize-space()='Fleet Management'] | "
         "//h2[normalize-space()='Core platform']",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: after clicking the cluster switcher the item is a button/link under the dropdown
+    "local-cluster_dropdown_item": (
+        "//button[@data-test-id='cluster-dropdown-toggle']//*[text()='local-cluster'] | "
+        "//span[contains(@class, 'c-menu__item-text') and text()='local-cluster']/.. | "
+        "//h2[normalize-space()='Administrator']",
         By.XPATH,
     ),
 }

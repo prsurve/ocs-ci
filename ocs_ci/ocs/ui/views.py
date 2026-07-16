@@ -1883,6 +1883,58 @@ acm_configuration_4_22 = {
         "//h2[normalize-space()='Administrator']",
         By.XPATH,
     ),
+    # OCP 4.22 PF6: local-cluster row in the managed clusters table.
+    # Older versions used the cluster-dropdown-toggle button (PF4).
+    # PF6 table rows use data-ouia-component-id; the Name cell contains a span with the cluster name.
+    "click-local-cluster": (
+        '//button[@data-test-id="cluster-dropdown-toggle"]//*[text()="local-cluster"] | '
+        '//td[@data-label="Name"]//span[text()="local-cluster"]',
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: "All Clusters" navigation after clicking into the local-cluster detail page.
+    # Older versions used a span with "All Clusters" text in the PF4 cluster switcher.
+    # PF6 uses the perspective switcher toggle or the breadcrumb link back to the clusters list.
+    "all-clusters-view": (
+        "//span[contains(text(),'All Clusters')] | "
+        "//button[@data-test-id='perspective-switcher-toggle'] | "
+        "//nav[@aria-label='Breadcrumb']//a[contains(@href,'/multicloud/infrastructure/clusters')]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: the "Create cluster set" modal input may use an id attribute instead of
+    # (or in addition to) the placeholder text used in PF4.
+    # ACM upstream uses id="clusterSetName" on this input; keep the placeholder as a fallback.
+    "cluster-set-name": (
+        "//input[@id='clusterSetName'] | "
+        "//input[@placeholder='Enter cluster set name']",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: PatternFly 6 renames CSS classes from pf-c-button/pf-m-* to pf-v6-c-button/pf-m-*.
+    # The XPath alternatives cover PF4 (pf-c-button), PF5 (pf-v5-c-button), and PF6 (pf-v6-c-button).
+    "next-btn": (
+        "//button[contains(@class,'pf-v6-c-button') and contains(@class,'pf-m-primary')] | "
+        "//button[contains(@class,'pf-v5-c-button') and contains(@class,'pf-m-primary')] | "
+        "//button[contains(@class,'c-button') and contains(@class,'-m-primary')]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: same class rename for the final Install button.
+    "install-btn": (
+        "//button[contains(@class,'pf-v6-c-button')"
+        " and contains(@class,'pf-m-primary')"
+        " and contains(@class,'pf-m-progress')] | "
+        "//button[contains(@class,'pf-v5-c-button')"
+        " and contains(@class,'pf-m-primary')"
+        " and contains(@class,'pf-m-progress')] | "
+        "//button[contains(@class,'c-button')"
+        " and contains(@class,'m-primary')"
+        " and contains(@class,'m-progress')]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: modal box title class changed.
+    "cluster-set-status": (
+        "//span[contains(@class,'pf-v6-c-modal-box__title-text')] | "
+        "//span[contains(@class,'c-modal-box__title-text')]",
+        By.XPATH,
+    ),
 }
 
 add_capacity = {

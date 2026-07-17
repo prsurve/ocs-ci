@@ -54,35 +54,12 @@ Backups are also kept at:
 ## Step 1a — Generating the Rack Details File
 
 The file is generated automatically when ocs-ci first initialises `IBMHCI`.
-If it is missing entirely (first run, or the file was deleted), there are
-two options.
+If it is missing entirely (first run, or the file was deleted), build it
+manually using the steps below.
 
-### Option A — Generate via ocs-ci (preferred, requires cluster API)
+### Build manually (cluster API required)
 
-Run the helper function from a Python shell inside the ocs-ci environment:
-
-```bash
-cd <ocs-ci-root>
-python3 - <<'EOF'
-from ocs_ci.utility.utils import genereate_cred_file_rack
-genereate_cred_file_rack()
-EOF
-```
-
-This connects to the cluster API, reads all `kickstart-*` ConfigMaps from
-the `ibm-spectrum-fusion-ns` namespace, fetches BMC credentials from the
-node secrets, and writes the JSON to
-`<DATA_DIR>/rack_details/<cluster_name>.json`.
-
-> **Note:** `rackIP` is fetched from a GitHub rack-config URL configured in
-> `auth.yaml` under `ibm_hci.rack_config_url`.  If that fetch fails,
-> `rackIP` will be absent — add it manually as shown in Option B.
-
----
-
-### Option B — Build manually (cluster API not required)
-
-Use this when the cluster API is unreachable (e.g. all nodes are off).
+Use this when the cluster is accessible.
 
 **1. Collect BMC IPs from the kickstart ConfigMaps**
 

@@ -1,4 +1,3 @@
-import ipaddress
 import json
 import logging
 import os
@@ -7,7 +6,6 @@ from pathlib import Path
 from paramiko import SSHClient, AutoAddPolicy
 
 from ocs_ci.ocs import constants
-from ocs_ci.ocs.exceptions import NodeBMCUnreachableError
 from ocs_ci.utility.utils import genereate_cred_file_rack
 from ocs_ci.ocs.ocp import OCP
 
@@ -53,16 +51,6 @@ class IBMHCI(object):
                 "Attempting to recover from backup files..."
             )
             self._patch_rack_ips()
-
-        # Nodes whose BMC could not be reached during init (missing rackIP or
-        # no ping response from any MGem).  Stored as "role.rack_serial" labels.
-        # Power operations on these nodes raise NodeBMCUnreachableError instead
-        # of attempting a doomed connection.
-        self._unreachable_nodes: set = set()
-
-        # Verify BMC connectivity for every node from the MGem.  Unreachable
-        # nodes are recorded in self._unreachable_nodes; construction continues.
-        self._verify_bmc_connectivity()
 
     def _load_rack_details(self):
         """
@@ -206,171 +194,6 @@ class IBMHCI(object):
                 f"Racks still missing rackIP: {still_missing}. "
                 f"Power operations may fail."
             )
-
-    def _ping_from_mgem(self, rack_ip, node_ip):
-        """
-        Ping a BMC IP from the MGem (rack SSH host) to verify reachability.
-
-        Args:
-            rack_ip (str): IP of the MGem / rack SSH host
-            node_ip (str): BMC IP to ping (IPv4 or IPv6); None is treated as
-                           unreachable and returns False immediately.
-
-        Returns:
-            bool: True if the ping succeeds, False otherwise
-        """
-        if not node_ip:
-            log.debug("_ping_from_mgem called with empty node_ip, skipping")
-            return False
-
-        try:
-            addr = ipaddress.ip_address(node_ip)
-        except ValueError:
-            log.debug(f"_ping_from_mgem: invalid IP address '{node_ip}', skipping")
-            return False
-
-        # -c 1  — single packet, -W 5  — 5-second timeout
-        if addr.version == 6:
-            # Use portable ping -6 (ping6 is not available on all distros)
-            cmd = f"ping -6 -c 1 -W 5 {node_ip}"
-        else:
-            cmd = f"ping -c 1 -W 5 {node_ip}"
-
-        try:
-            _, _, exit_code = self._execute_ssh_command(
-                rack_ip, self.rack_ssh_username, self.rack_ssh_password, cmd
-            )
-            reachable = exit_code == 0
-            if reachable:
-                log.debug(f"BMC {node_ip} is reachable from MGem {rack_ip}")
-            else:
-                log.debug(f"BMC {node_ip} is NOT reachable from MGem {rack_ip}")
-            return reachable
-        except Exception as e:
-            log.debug(f"Ping from MGem to {node_ip} failed with exception: {e}")
-            return False
-
-    def _verify_bmc_connectivity(self):
-        """
-        Ping every node's BMC IPs (IPv6 then IPv4) from the MGem.
-
-        Multi-AZ clusters have one MGem (rackIP) per rack (2 for 2-AZ,
-        3 for 3-AZ).  A node's BMC may not be reachable from its own rack's
-        MGem but may be reachable from another AZ's MGem (e.g. during a
-        partial network fault).  The algorithm is:
-
-          1. Try the node's own rack's rackIP first.
-          2. If that fails, try every other rack's rackIP.
-          3. If any MGem reaches the BMC, record that MGem IP as the working
-             rackIP for this rack and propagate it to every other rack entry
-             that shared the same (broken) rackIP — so power operations on
-             all affected nodes will use the known-good MGem going forward.
-          4. If no MGem reaches the BMC, add it to the unreachable list.
-          5. After all nodes are checked, raise NodeBMCUnreachableError if
-             anything remains unreachable.
-
-        Raises:
-            NodeBMCUnreachableError: When a node has no reachable BMC IP.
-        """
-        # Collect all distinct rackIP values available in the loaded details
-        all_rack_ips = {
-            serial: data.get("rackInfo", {}).get("rackIP")
-            for serial, data in self.rack_details.items()
-            if data.get("rackInfo", {}).get("rackIP")
-        }
-
-        unreachable = []
-        rackip_fixes = {}
-
-        for rack_serial, rack_data in self.rack_details.items():
-            rack_ip = rack_data.get("rackInfo", {}).get("rackIP")
-            if not rack_ip:
-                # rackIP still missing — already warned in _patch_rack_ips
-                continue
-
-            for node_role, node_info in rack_data.get("nodes", {}).items():
-                ipv6 = node_info.get("ipv6")
-                ipv4 = node_info.get("ipv4")
-                node_label = f"{node_role}.{rack_serial}"
-
-                if not ipv6 and not ipv4:
-                    log.warning(f"No BMC IP configured for {node_label}, skipping ping")
-                    continue
-
-                if not ipv6 and ipv4:
-                    log.info(f"IPv6 not present for {node_label}, using IPv4 ({ipv4})")
-
-                bmc_ips = [
-                    (ip_type, ip)
-                    for ip_type, ip in [("IPv6", ipv6), ("IPv4", ipv4)]
-                    if ip
-                ]
-                mgem_candidates = [rack_ip] + [
-                    ip
-                    for serial, ip in all_rack_ips.items()
-                    if serial != rack_serial and ip != rack_ip
-                ]
-
-                log.info(
-                    f"Verifying BMC connectivity for {node_label} "
-                    f"(trying {len(mgem_candidates)} MGem(s))"
-                )
-
-                working_mgem = self._find_reachable_mgem(
-                    node_label, bmc_ips, mgem_candidates
-                )
-
-                if working_mgem is None:
-                    unreachable.append(node_label)
-                    continue
-
-                if working_mgem != rack_ip:
-                    log.warning(
-                        f"rack {rack_serial} rackIP {rack_ip} could not reach "
-                        f"{node_label}; updating to working MGem {working_mgem}"
-                    )
-                    rackip_fixes[rack_ip] = working_mgem
-
-        self._apply_rackip_fixes(rackip_fixes)
-
-        if unreachable:
-            raise NodeBMCUnreachableError(
-                f"BMC unreachable for the following nodes (tried all MGems, "
-                f"no IPv6 or IPv4 responded to ping): {unreachable}"
-            )
-
-        log.info("BMC connectivity verified for all nodes")
-
-    def _find_reachable_mgem(self, node_label, bmc_ips, mgem_candidates):
-        """
-        Search for the first MGem that can reach any of the node's BMC IPs.
-
-        Args:
-            node_label (str): Display label for logging (e.g. "control-1-ru2.l001")
-            bmc_ips (list): Ordered [(ip_type, ip), ...] — IPv6 first, IPv4 second
-            mgem_candidates (list): Ordered MGem IPs — own rack first, others after
-
-        Returns:
-            str: The working MGem IP, or None if no MGem reached the BMC
-        """
-        for mgem_ip in mgem_candidates:
-            for ip_type, bmc_ip in bmc_ips:
-                log.info(
-                    f"Pinging BMC {ip_type} ({bmc_ip}) for {node_label} "
-                    f"from MGem {mgem_ip}"
-                )
-                if self._ping_from_mgem(mgem_ip, bmc_ip):
-                    log.info(
-                        f"BMC {ip_type} ({bmc_ip}) reachable for {node_label} "
-                        f"via MGem {mgem_ip}"
-                    )
-                    return mgem_ip
-                else:
-                    log.warning(
-                        f"BMC {ip_type} ({bmc_ip}) not reachable for "
-                        f"{node_label} from MGem {mgem_ip}"
-                    )
-        return None
 
     def _apply_rackip_fixes(self, rackip_fixes):
         """

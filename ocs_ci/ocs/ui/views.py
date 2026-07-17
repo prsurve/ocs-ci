@@ -1953,6 +1953,89 @@ acm_configuration_4_22 = {
         "//button[.//*[normalize-space()='Manage resource assignments']]",
         By.XPATH,
     ),
+    # OCP 4.22 PF6: the manage-resources page SearchInput placeholder changed
+    # from 'Search' (PF4) to 'Find by name' (PF6 ACM). Also matches the PF6
+    # text-input-group class as a broad fallback.
+    "search-cluster": (
+        "//input[@placeholder='Find by name'] | "
+        "//input[@placeholder='Search'] | "
+        "//input[contains(@class,'pf-v6-c-text-input-group__text-input')] | "
+        "//input[contains(@class,'c-text-input-group__text-input')]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: the clear/reset button for the search input changed from
+    # an SVG path element to a button with aria-label='Reset' (already set in
+    # acm_configuration_4_19, but explicitly re-stated here for 4.22+ clarity).
+    "clear-search": ("//button[@aria-label='Reset']", By.XPATH),
+    # OCP 4.22 PF6: the Submariner add-ons tab may render as <a> or as a
+    # nav item whose text lives inside a child <span>.  Add a descendant text
+    # search so normalize-space() on the parent still matches.
+    "submariner-tab": (
+        "//a[normalize-space()='Submariner add-ons'] | "
+        "//a[.//*[normalize-space()='Submariner add-ons']] | "
+        "//button[.//*[normalize-space()='Submariner add-ons']]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: the "Select clusters" TypeaheadSelect placeholder may vary
+    # between ACM builds; match all known variants and fall back to the
+    # pf-v6 combobox input class.
+    "target-clusters": (
+        "//input[@placeholder='Select clusters'] | "
+        "//input[@placeholder='Select a cluster'] | "
+        "//input[contains(@class,'pf-v6-c-combo-box') or "
+        "contains(@class,'pf-v6-c-text-input-group__text-input')]"
+        "[@role='combobox' or @aria-label]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: button text lives inside a <span class="pf-v6-c-button__text">
+    # child, so normalize-space() on the <button> itself returns empty.
+    # The .// descendant search fixes this for all PF versions.
+    # Use {0} (not {}) so that format_locator's single positional arg fills both
+    # placeholders in the one-string format call.
+    "cluster-name-selection": (
+        "//button[normalize-space()='{0}'] | "
+        "//button[.//*[normalize-space()='{0}']]",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: NumberInput uses aria-label='Plus' (PF4/PF5) or
+    # aria-label='Increment' (PF6).  Cover both.
+    "gateway-count-btn": (
+        "//button[@aria-label='Plus'] | " "//button[@aria-label='Increment']",
+        By.XPATH,
+    ),
+    # OCP 4.22 PF6: Submariner status popover trigger buttons wrap their text
+    # in a child <span>, so normalize-space() on the <button> returns empty.
+    # Add descendant-text fallbacks for all four status/label locators.
+    "connection-status-1": (
+        "(//button[@type='button'][normalize-space()='Healthy'])[1] | "
+        "(//button[@type='button'][.//*[normalize-space()='Healthy']])[1]",
+        By.XPATH,
+    ),
+    "connection-status-2": (
+        "(//button[@type='button'][normalize-space()='Healthy'])[3] | "
+        "(//button[@type='button'][.//*[normalize-space()='Healthy']])[3]",
+        By.XPATH,
+    ),
+    "agent-status-1": (
+        "(//button[@type='button'][normalize-space()='Healthy'])[2] | "
+        "(//button[@type='button'][.//*[normalize-space()='Healthy']])[2]",
+        By.XPATH,
+    ),
+    "agent-status-2": (
+        "(//button[@type='button'][normalize-space()='Healthy'])[4] | "
+        "(//button[@type='button'][.//*[normalize-space()='Healthy']])[4]",
+        By.XPATH,
+    ),
+    "node-label-1": (
+        "(//button[@type='button'][normalize-space()='Nodes labeled'])[1] | "
+        "(//button[@type='button'][.//*[normalize-space()='Nodes labeled']])[1]",
+        By.XPATH,
+    ),
+    "node-label-2": (
+        "(//button[@type='button'][normalize-space()='Nodes labeled'])[2] | "
+        "(//button[@type='button'][.//*[normalize-space()='Nodes labeled']])[2]",
+        By.XPATH,
+    ),
 }
 
 add_capacity = {

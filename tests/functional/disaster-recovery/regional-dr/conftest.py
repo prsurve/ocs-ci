@@ -550,7 +550,7 @@ def scale_deployments(request):
     return _scale
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=False)
 def mirror_rdr_images(request):
     """
     Mirror RDR images to disconnected registry and apply ITMS to managed clusters.

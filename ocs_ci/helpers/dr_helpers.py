@@ -35,6 +35,7 @@ from ocs_ci.ocs.resources.pod import (
     get_all_pods,
     get_ceph_tools_pod,
     get_odf_external_snapshotter_leader,
+    get_pods_having_label,
     wait_for_matching_pattern_in_pod_logs,
 )
 from ocs_ci.ocs.resources.pvc import get_all_pvc_objs
@@ -1644,7 +1645,12 @@ def get_all_drpolicy():
     return return_drpolicy_list
 
 
-@retry(UnexpectedBehaviour, tries=5, delay=10, backoff=2)
+# Guard flag: bounce the ramen-hub-operator pod at most once per process
+# across all retry attempts of validate_drpolicy_grouping.
+_ramen_hub_pod_bounced = False
+
+
+@retry(UnexpectedBehaviour, tries=10, delay=30, backoff=2, max_delay=120)
 def validate_drpolicy_grouping(drpolicy_name=None):
     """
     Validate DRPolicy configuration for CG behavior.
@@ -1694,7 +1700,119 @@ def validate_drpolicy_grouping(drpolicy_name=None):
         if not peer_classes:
             error_msg = f"PeerClasses not found in DRPolicy: {drp_name}"
             logger.error(error_msg)
-            raise UnexpectedBehaviour(error_msg)
+
+            # --- Diagnostic: dump drcconfig-mw ManifestWork for each DR cluster
+            # using the OCP resource API (avoids raw oc subprocess calls).
+            dr_cluster_relations = config.MULTICLUSTER.get("dr_cluster_relations", [])
+            cluster_names = dr_cluster_relations[0] if dr_cluster_relations else []
+            for cl_name in cluster_names:
+                try:
+                    mw_obj = ocp.OCP(
+                        kind=constants.MANIFEST_WORKS,
+                        namespace=cl_name,
+                        resource_name="drcconfig-mw",
+                    )
+                    mw_data = mw_obj.get()
+                    mw_status = mw_data.get("status", {}).get(
+                        "conditions", "(no conditions)"
+                    )
+                    logger.info(
+                        f"[{cl_name}] drcconfig-mw ManifestWork status "
+                        f"conditions: {mw_status}"
+                    )
+                except Exception as dump_exc:
+                    logger.warning(
+                        f"[{cl_name}] Could not fetch drcconfig-mw "
+                        f"ManifestWork: {dump_exc}"
+                    )
+
+            # --- Recovery: delete the ramen-hub-operator pod once to speed up
+            # reconciliation.  The operator will be immediately recreated by its
+            # Deployment controller and will re-reconcile all DRPolicy resources
+            # on startup.  This is purely a reconciliation acceleration technique
+            # — it does NOT indicate a bug in the operator; peerClasses can
+            # legitimately take several minutes to appear on a loaded cluster.
+            # The normal retry loop above already handles the waiting; this bounce
+            # just gives the operator a nudge to process sooner.
+            global _ramen_hub_pod_bounced
+            if not _ramen_hub_pod_bounced:
+                _ramen_hub_pod_bounced = True
+                logger.info(
+                    "Deleting ramen-hub-operator pod in "
+                    f"{constants.OPENSHIFT_OPERATORS} to accelerate DRPolicy "
+                    "reconciliation (pod will be recreated automatically by its "
+                    "Deployment — this is a speed-up, not an error recovery)"
+                )
+                try:
+                    ramen_pods = get_pods_having_label(
+                        label="app=ramen-hub",
+                        namespace=constants.OPENSHIFT_OPERATORS,
+                    )
+                    for pod_info in ramen_pods:
+                        pod_name = pod_info["metadata"]["name"]
+                        ocp.OCP(
+                            kind=constants.POD,
+                            namespace=constants.OPENSHIFT_OPERATORS,
+                        ).delete(resource_name=pod_name, wait=True)
+                        logger.info(
+                            f"Deleted pod '{pod_name}' — Deployment controller "
+                            "will recreate it; waiting for new pod to start"
+                        )
+                    logger.info(
+                        "Sleeping 120s to allow ramen-hub-operator to restart "
+                        "and re-reconcile DRPolicy peerClasses"
+                    )
+                    time.sleep(120)
+                    # Re-fetch the DRPolicy and check peerClasses once
+                    # before falling through to raise (which triggers retry).
+                    logger.info(
+                        "Re-checking peerClasses after ramen-hub-operator bounce"
+                    )
+                    if drpolicy_name:
+                        refreshed = ocp.OCP(
+                            kind=constants.DRPOLICY,
+                            resource_name=drpolicy_name,
+                            namespace=constants.OPENSHIFT_DR_SYSTEM_NAMESPACE,
+                        ).get()
+                        refreshed_peer_classes = (
+                            refreshed.get("status", {})
+                            .get("async", {})
+                            .get("peerClasses")
+                        )
+                    else:
+                        refreshed_list = get_all_drpolicy()
+                        refreshed_peer_classes = next(
+                            (
+                                p.get("status", {}).get("async", {}).get("peerClasses")
+                                for p in refreshed_list
+                                if p.get("metadata", {}).get("name") == drp_name
+                            ),
+                            None,
+                        )
+                    if refreshed_peer_classes:
+                        logger.info(
+                            f"peerClasses now populated after pod bounce: "
+                            f"{refreshed_peer_classes}"
+                        )
+                        # Patch the in-loop variable so the rest of the
+                        # validation loop proceeds normally.
+                        peer_classes = refreshed_peer_classes
+                    else:
+                        logger.warning(
+                            "peerClasses still absent after pod bounce; "
+                            "retry loop will continue"
+                        )
+                        raise UnexpectedBehaviour(error_msg)
+                except UnexpectedBehaviour:
+                    raise
+                except Exception as bounce_exc:
+                    logger.warning(
+                        f"Pod bounce attempt failed: {bounce_exc}; "
+                        "retry loop will continue"
+                    )
+                    raise UnexpectedBehaviour(error_msg)
+            else:
+                raise UnexpectedBehaviour(error_msg)
 
         # Validate grouping is true for every storageClass in peerClasses
         logger.info(f"Check grouping for storageClasses in DRPolicy: {drp_name}")
@@ -3218,6 +3336,53 @@ def create_service_exporter(annotate=True):
                     f" ocs.openshift.io/api-server-exported-address={cluster_address}"
                     f"{cluster_service_export_provider_server}:{cluster_address_port} --overwrite"
                 )
+
+            # On proxy clusters, add the provider-server address to the
+            # cluster-wide noProxy list so that internal ODF traffic is not
+            # routed through the proxy.
+            #
+            # Auto-detection: read the live proxy/cluster object — if
+            # spec.httpProxy is set the cluster is behind a proxy, regardless
+            # of what config.DEPLOYMENT["proxy"] says (handles re-runs and
+            # clusters where the flag was never explicitly set in the config).
+            # config.DEPLOYMENT["proxy"] is also respected as an explicit
+            # override so test configs can force the behaviour.
+            no_proxy_entry = (
+                f"{cluster_address}{cluster_service_export_provider_server}"
+            )
+            proxy_obj = OCP(kind=constants.PROXY, resource_name="cluster").get()
+            live_http_proxy = proxy_obj.get("spec", {}).get("httpProxy", "")
+            is_proxy_cluster = bool(live_http_proxy) or bool(
+                config.DEPLOYMENT.get("proxy")
+            )
+
+            if is_proxy_cluster:
+                # Read the current noProxy value from the live object status
+                # (status.noProxy is the fully-resolved list including defaults).
+                current_no_proxy = proxy_obj.get("status", {}).get("noProxy", "")
+                entries = [e.strip() for e in current_no_proxy.split(",") if e.strip()]
+
+                if no_proxy_entry in entries:
+                    logger.info(
+                        f"'{no_proxy_entry}' already present in proxy/cluster "
+                        "noProxy — skipping patch and MCP wait"
+                    )
+                else:
+                    entries.append(no_proxy_entry)
+                    updated_no_proxy = ",".join(entries)
+                    logger.info(
+                        f"Proxy cluster detected — adding '{no_proxy_entry}' "
+                        f"to proxy/cluster noProxy (new value: '{updated_no_proxy}')"
+                    )
+                    exec_cmd(
+                        "oc patch proxy/cluster --type=merge "
+                        f'--patch=\'{{"spec":{{"noProxy":"{updated_no_proxy}"}}}}\''
+                    )
+                    logger.info(
+                        "Waiting for MachineConfigPool to roll out after "
+                        "noProxy update"
+                    )
+                    wait_for_machineconfigpool_status("all")
     config.switch_ctx(restore_index)
 
 

@@ -1987,6 +1987,16 @@ acm_configuration_4_22 = {
         "[@role='combobox' or @aria-label]",
         By.XPATH,
     ),
+    # OCP 4.22 PF6: select the checkbox in the table row whose Name cell contains
+    # exactly the given cluster name.  This avoids picking the wrong row when
+    # multiple clusters share a name prefix (e.g. f39l052 vs f39l052-hcp-2).
+    # Falls back to the plain data-label approach used in older ACM builds.
+    # Use {0} so format_locator fills both placeholders from one positional arg.
+    "select-cluster-checkbox": (
+        "//tr[.//td[@data-label='Name' and normalize-space()='{0}']]//input[@type='checkbox'] | "
+        "//tr[.//td[@data-label='Name']//*[normalize-space()='{0}']]//input[@type='checkbox']",
+        By.XPATH,
+    ),
     # OCP 4.22 PF6: button text lives inside a <span class="pf-v6-c-button__text">
     # child, so normalize-space() on the <button> itself returns empty.
     # The .// descendant search fixes this for all PF versions.

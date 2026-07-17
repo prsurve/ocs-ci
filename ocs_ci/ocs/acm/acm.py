@@ -326,21 +326,62 @@ class AcmAddClusters(AcmPageNavigator):
                 "Timed out waiting for manage-resources page to load; "
                 "proceeding anyway"
             )
-        log.info(f"Search and select cluster '{cluster_name_a}'")
-        self.do_send_keys(self.page_nav["search-cluster"], text=cluster_name_a)
-        self.do_click(self.page_nav["select-first-checkbox"], enable_screenshot=True)
-        log.info(f"Clear search by clicking on cross mark for cluster {cluster_name_a}")
-        self.do_click(self.page_nav["clear-search"])
-        log.info(f"Search and select cluster '{cluster_name_b}'")
-        self.do_send_keys(self.page_nav["search-cluster"], text=cluster_name_b)
-        self.do_click(self.page_nav["select-first-checkbox"], enable_screenshot=True)
-        log.info(f"Clear search by clicking on cross mark for cluster {cluster_name_b}")
-        self.do_click(self.page_nav["clear-search"])
+        for cluster_name in (cluster_name_a, cluster_name_b):
+            log.info(f"Search and select cluster '{cluster_name}'")
+            self.do_send_keys(self.page_nav["search-cluster"], text=cluster_name)
+            # The search is a substring match — typing "f39l052" also shows
+            # "f39l052-hcp-2", "f39l052-c1-h1", etc.  Wait for the exact-name
+            # row checkbox to appear (confirms the table has re-rendered after
+            # the keystroke), then click only that row's checkbox.
+            exact_checkbox_xpath = (
+                "//tr[.//td[@data-label='Name' and "
+                f"normalize-space()='{cluster_name}']]//input[@type='checkbox'] | "
+                "//tr[.//td[@data-label='Name']"
+                f"//*[normalize-space()='{cluster_name}']]//input[@type='checkbox']"
+            )
+            log.info(f"Waiting for exact-match row for '{cluster_name}' to appear")
+            try:
+                checkbox_el = WebDriverWait(self.driver, 60).until(
+                    ec.visibility_of_element_located((By.XPATH, exact_checkbox_xpath))
+                )
+                log.info(
+                    f"Found exact-match row for '{cluster_name}', clicking checkbox"
+                )
+                self.driver.execute_script(
+                    "arguments[0].scrollIntoView({block:'center'});", checkbox_el
+                )
+                checkbox_el.click()
+            except Exception:
+                log.warning(
+                    f"Exact-match row for '{cluster_name}' not found within 60s; "
+                    "falling back to first visible checkbox"
+                )
+                self.do_click(
+                    self.page_nav["select-first-checkbox"], enable_screenshot=True
+                )
+            log.info(f"Clear search after selecting cluster '{cluster_name}'")
+            self.do_click(self.page_nav["clear-search"])
         log.info("Click on 'Review'")
         self.do_click(self.page_nav["review-btn"], enable_screenshot=True)
         log.info("Click on 'Save' to confirm the changes")
         self.do_click(self.page_nav["confirm-btn"], enable_screenshot=True)
-        time.sleep(3)
+        # After clicking Save the browser navigates from /manage-resources to
+        # the cluster-set detail page (/overview).  Wait up to 240 s for that
+        # navigation to complete before looking for the Submariner add-ons tab.
+        log.info(
+            "Waiting for navigation away from manage-resources page "
+            "(to cluster-set detail, timeout=240s)"
+        )
+        try:
+            WebDriverWait(self.driver, 240).until(
+                lambda d: "manage-resources" not in d.current_url
+            )
+            log.info(f"Navigated to: {self.driver.current_url}")
+        except Exception:
+            log.warning(
+                "Timed out waiting for manage-resources navigation; "
+                "proceeding anyway"
+            )
         log.info("Click on 'Submariner add-ons' tab")
         self.do_click(self.page_nav["submariner-tab"])
         log.info("Click on 'Install Submariner add-ons' button")

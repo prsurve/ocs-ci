@@ -848,17 +848,20 @@ class BaseUI:
                         pass
             return False
 
-    def check_element_presence(self, locator, timeout=5, use_fallback=True):
+    def check_element_presence(self, locator, timeout=5, use_fallback=True, use_fallback=True):
         """
         Check if an web element is present on the web console or not.
-
 
         Args:
              locator (tuple): (GUI element needs to operate on (str), type (By))
              timeout (int): Looks for a web element repeatedly until timeout (sec) occurs
-             use_fallback (bool): if True, attempt AI locator fallback when element is not found
+             use_fallback (bool): When False, skip the AI locator fallback entirely.
+                 Set to False when this method is used as an optional probe (e.g. checking
+                 whether an optional modal is present) — the element is not expected to
+                 always exist and firing the AI fallback on every miss wastes minutes.
+
         Returns:
-            bool: True if the element is found, returns False otherwise and raises NoSuchElementException
+            bool: True if the element is found, returns False otherwise
 
         """
         try:
@@ -877,44 +880,42 @@ class BaseUI:
         except (NoSuchElementException, StaleElementReferenceException):
             logger.error("Expected element not found on UI")
             self.take_screenshot()
-            if use_fallback:
-                # locator here is (By, value) — reverse for fallback which expects (value, By)
-                new_locator = self.locator_fallback.attempt_fallback(
-                    (locator[1], locator[0]),
-                    "check_presence",
-                    stack_trace=traceback.format_exc(),
-                )
-                if new_locator:
-                    try:
-                        WebDriverWait(self.driver, min(timeout, 10)).until(
-                            ec.presence_of_element_located(
-                                (new_locator[1], new_locator[0])
-                            )
-                        )
-                        return True
-                    except (TimeoutException, NoSuchElementException):
-                        pass
+            if not use_fallback:
+                return False
+            # locator here is (By, value) — reverse for fallback which expects (value, By)
+            new_locator = self.locator_fallback.attempt_fallback(
+                (locator[1], locator[0]),
+                "check_presence",
+                stack_trace=traceback.format_exc(),
+            )
+            if new_locator:
+                try:
+                    WebDriverWait(self.driver, min(timeout, 10)).until(
+                        ec.presence_of_element_located((new_locator[1], new_locator[0]))
+                    )
+                    return True
+                except (TimeoutException, NoSuchElementException):
+                    pass
             return False
         except TimeoutException:
             logger.error(f"Timedout while waiting for element with {locator}")
             self.take_screenshot()
-            if use_fallback:
-                # locator here is (By, value) — reverse for fallback which expects (value, By)
-                new_locator = self.locator_fallback.attempt_fallback(
-                    (locator[1], locator[0]),
-                    "check_presence",
-                    stack_trace=traceback.format_exc(),
-                )
-                if new_locator:
-                    try:
-                        WebDriverWait(self.driver, min(timeout, 10)).until(
-                            ec.presence_of_element_located(
-                                (new_locator[1], new_locator[0])
-                            )
-                        )
-                        return True
-                    except (TimeoutException, NoSuchElementException):
-                        pass
+            if not use_fallback:
+                return False
+            # locator here is (By, value) — reverse for fallback which expects (value, By)
+            new_locator = self.locator_fallback.attempt_fallback(
+                (locator[1], locator[0]),
+                "check_presence",
+                stack_trace=traceback.format_exc(),
+            )
+            if new_locator:
+                try:
+                    WebDriverWait(self.driver, min(timeout, 10)).until(
+                        ec.presence_of_element_located((new_locator[1], new_locator[0]))
+                    )
+                    return True
+                except (TimeoutException, NoSuchElementException):
+                    pass
             return False
 
     def wait_for_endswith_url(self, endswith, timeout=60):

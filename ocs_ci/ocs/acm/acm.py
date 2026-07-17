@@ -299,6 +299,33 @@ class AcmAddClusters(AcmPageNavigator):
         self.do_click(
             self.page_nav["click-manage-resource-assignments"], enable_screenshot=True
         )
+        # The manage-resources page renders skeleton loaders while it fetches the
+        # cluster list from the ACM API.  On a loaded cluster this can take several
+        # minutes.  Wait up to 240 s for:
+        #   1. All pf-v6-c-skeleton elements to disappear (data loaded), AND
+        #   2. The search input to become visible (table rendered).
+        # Without this wait the search input does not yet exist in the DOM and
+        # do_send_keys fails immediately.
+        log.info(
+            "Waiting for manage-resources page to finish loading "
+            "(skeleton loaders to clear, timeout=240s)"
+        )
+        try:
+            WebDriverWait(self.driver, 240).until_not(
+                ec.presence_of_element_located((By.CSS_SELECTOR, ".pf-v6-c-skeleton"))
+            )
+            log.info("Skeleton loaders cleared, waiting for search input to appear")
+            WebDriverWait(self.driver, 60).until(
+                ec.visibility_of_element_located(
+                    (By.XPATH, self.page_nav["search-cluster"][0])
+                )
+            )
+            log.info("manage-resources page fully loaded")
+        except Exception:
+            log.warning(
+                "Timed out waiting for manage-resources page to load; "
+                "proceeding anyway"
+            )
         log.info(f"Search and select cluster '{cluster_name_a}'")
         self.do_send_keys(self.page_nav["search-cluster"], text=cluster_name_a)
         self.do_click(self.page_nav["select-first-checkbox"], enable_screenshot=True)

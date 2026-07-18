@@ -3805,6 +3805,59 @@ def create_ingress_cert_dr(
                     )
                     wait_for_machineconfigpool_status(node_type="all")
 
+        # --- Phase 5: restart ramen operator pods so they reload the new trust bundle
+        # The MCP rollout injects the new CA into the node trust store on disk, but
+        # operator pods that were already running before the rollout still hold the
+        # old in-memory trust store.  Deleting them forces the Deployment controller
+        # to recreate them and they will start with the updated CA bundle.
+        # Hub clusters run ramen-hub-operator (label: app=ramen-hub).
+        # Spoke clusters run ramen-dr-cluster-operator (label: app=ramen-dr-cluster).
+        for cluster in config.clusters:
+            index = cluster.MULTICLUSTER["multicluster_index"]
+            cluster_name = cluster.MULTICLUSTER.get("name", f"Cluster-{index}")
+            is_hosted = cluster.MULTICLUSTER.get("is_hosted", False)
+            is_hub = cluster.MULTICLUSTER.get("acm_cluster", False)
+
+            if is_hosted:
+                continue
+
+            ramen_label = (
+                "app=ramen-hub"
+                if is_hub
+                else constants.RAMEN_DR_CLUSTER_OPERATOR_APP_LABEL
+            )
+
+            with config.RunWithConfigContext(index):
+                try:
+                    ramen_pods = get_pods_having_label(
+                        label=ramen_label,
+                        namespace=constants.OPENSHIFT_OPERATORS,
+                    )
+                except Exception:
+                    ramen_pods = []
+
+                if not ramen_pods:
+                    logger.info(
+                        f"[{cluster_name}] No pods found for label '{ramen_label}' "
+                        "in openshift-operators — skipping restart"
+                    )
+                    continue
+
+                logger.info(
+                    f"[{cluster_name}] Restarting ramen operator pods "
+                    f"(label: {ramen_label}) to reload updated CA trust bundle"
+                )
+                for pod_info in ramen_pods:
+                    pod_name = pod_info["metadata"]["name"]
+                    ocp.OCP(
+                        kind=constants.POD,
+                        namespace=constants.OPENSHIFT_OPERATORS,
+                    ).delete(resource_name=pod_name, wait=True)
+                    logger.info(
+                        f"[{cluster_name}] Deleted pod '{pod_name}' — "
+                        "Deployment controller will recreate it"
+                    )
+
 
 def create_multiclusterservice_dr():
     """

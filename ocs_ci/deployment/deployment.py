@@ -20,7 +20,6 @@ from botocore.exceptions import BotoCoreError, ClientError, EndpointConnectionEr
 
 from ocs_ci.deployment.helpers import storage_class
 from ocs_ci.utility.azure_utils import AZURE as AzureUtil
-from ocs_ci.deployment.helpers.hypershift_base import is_hosted_cluster
 from ocs_ci.deployment.ocp import OCPDeployment as BaseOCPDeployment
 from ocs_ci.deployment.helpers.external_cluster_helpers import (
     ExternalCluster,
@@ -490,7 +489,14 @@ class Deployment(object):
             if dr_cluster_relations:
                 dr_cluster_names = dr_cluster_relations[0].copy()
                 for index, dr_cluster in enumerate(dr_cluster_names):
-                    if is_hosted_cluster(dr_cluster):
+                    try:
+                        idx = config.get_cluster_index_by_name(dr_cluster)
+                        _is_hosted = config.clusters[idx].MULTICLUSTER.get(
+                            "is_hosted", False
+                        )
+                    except Exception:
+                        _is_hosted = False
+                    if _is_hosted:
                         dr_cluster_names[index] = (
                             f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{dr_cluster}"
                         )

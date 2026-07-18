@@ -12,7 +12,6 @@ from time import sleep
 
 from novaclient.exceptions import ResourceNotFound
 
-from ocs_ci.deployment.helpers.hypershift_base import is_hosted_cluster
 
 import yaml
 
@@ -1629,11 +1628,18 @@ def get_all_drpolicy():
 
     dr_cluster_relations = config.MULTICLUSTER.get("dr_cluster_relations", [])
     if dr_cluster_relations:
-        current_managed_clusters_list = [
-            f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{item}"
-            for item in dr_cluster_relations[0]
-            if is_hosted_cluster(cluster_name=item)
-        ]
+        current_managed_clusters_list = []
+        for item in dr_cluster_relations[0]:
+            try:
+                idx = config.get_cluster_index_by_name(item)
+                _is_hosted = config.clusters[idx].MULTICLUSTER.get("is_hosted", False)
+            except Exception:
+                _is_hosted = False
+            current_managed_clusters_list.append(
+                f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{item}"
+                if _is_hosted
+                else item
+            )
 
     for drpolicy in drpolicy_list:
 
@@ -1706,10 +1712,26 @@ def validate_drpolicy_grouping(drpolicy_name=None):
             dr_cluster_relations = config.MULTICLUSTER.get("dr_cluster_relations", [])
             cluster_names = dr_cluster_relations[0] if dr_cluster_relations else []
             for cl_name in cluster_names:
+                # ManifestWorks on the ACM hub live in a namespace named after
+                # the managed cluster.  For hosted (HCP) clusters the managed
+                # cluster name carries the "dr-" prefix, so we must apply it
+                # here the same way deploy_dr_policy does.
+                try:
+                    idx = config.get_cluster_index_by_name(cl_name)
+                    cl_is_hosted = config.clusters[idx].MULTICLUSTER.get(
+                        "is_hosted", False
+                    )
+                except Exception:
+                    cl_is_hosted = False
+                mw_namespace = (
+                    f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{cl_name}"
+                    if cl_is_hosted
+                    else cl_name
+                )
                 try:
                     mw_obj = ocp.OCP(
                         kind=constants.MANIFEST_WORKS,
-                        namespace=cl_name,
+                        namespace=mw_namespace,
                         resource_name="drcconfig-mw",
                     )
                     mw_data = mw_obj.get()
@@ -3139,14 +3161,18 @@ def get_cluster_set_name(switch_ctx=None):
             )
     dr_cluster_relations = config.MULTICLUSTER.get("dr_cluster_relations", [])
     if dr_cluster_relations:
-        current_managed_clusters_list = [
-            (
+        current_managed_clusters_list = []
+        for item in dr_cluster_relations[0]:
+            try:
+                idx = config.get_cluster_index_by_name(item)
+                _is_hosted = config.clusters[idx].MULTICLUSTER.get("is_hosted", False)
+            except Exception:
+                _is_hosted = False
+            current_managed_clusters_list.append(
                 f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{item}"
-                if is_hosted_cluster(cluster_name=item)
+                if _is_hosted
                 else item
             )
-            for item in dr_cluster_relations[0]
-        ]
 
     # The list current_managed_clusters_list is required for RDR, not mandatory for MDR
     current_managed_clusters_list = current_managed_clusters_list or [

@@ -3580,6 +3580,8 @@ def create_ingress_cert_dr(
     )
     logger.info(f"Cluster indexes selected for CA collection: {all_cert_indexes}")
 
+    original_index = config.cur_index
+
     ingress_data = templating.load_yaml(constants.OC_INGRESS_CERT_YAML)
     # LiteralString ensures the PEM bundle is written with YAML block-scalar
     # style (|), which preserves embedded newlines correctly in the output file.
@@ -3588,14 +3590,47 @@ def create_ingress_cert_dr(
     # into the final ca-bundle.crt value.
     ssl_data = []
 
-    # Save original context so we can restore it after switching per-cluster.
-    original_index = config.cur_index
-
     # --- Phase 2: collect and deduplicate individual PEM blocks --------------
     # Each cluster's ConfigMap may contain multiple PEM certs (leaf + CA chain).
     # We split on the PEM footer so every cert is checked independently —
     # this prevents duplicates when two clusters share the same signing CA.
     seen_certs = set()
+
+    # Seed ssl_data with whatever is already in the existing user-ca-bundle on
+    # each non-hosted cluster BEFORE collecting from default-ingress-cert.
+    # This preserves certs from other spoke-pair test runs that were previously
+    # applied to the ACM hub (or any cluster) so they are not wiped out when
+    # this run's bundle is applied.
+    for cert_index in all_cert_indexes:
+        with config.RunWithConfigContext(cert_index):
+            cluster_name = config.clusters[cert_index].MULTICLUSTER.get(
+                "name", f"Cluster-{cert_index}"
+            )
+            try:
+                existing_cm = ocp.OCP(
+                    kind=constants.CONFIGMAP,
+                    resource_name=cert_name,
+                    namespace=namespace,
+                ).get()
+                existing_raw = existing_cm.get("data", {}).get("ca-bundle.crt", "")
+            except Exception:
+                existing_raw = ""
+            if existing_raw:
+                pre_count = 0
+                for pem_block in existing_raw.split("-----END CERTIFICATE-----"):
+                    pem_block = pem_block.strip()
+                    if pem_block:
+                        pem_block = pem_block + "\n-----END CERTIFICATE-----\n"
+                        if pem_block not in seen_certs:
+                            seen_certs.add(pem_block)
+                            ssl_data.append(pem_block)
+                            pre_count += 1
+                if pre_count:
+                    logger.info(
+                        f"[{cluster_name}] Seeded {pre_count} existing cert(s) "
+                        f"from '{cert_name}' (preserving certs from other spoke pairs)"
+                    )
+
     for cert_index in all_cert_indexes:
         config.switch_ctx(cert_index)
         cluster_name = config.clusters[cert_index].MULTICLUSTER.get(
@@ -3652,6 +3687,76 @@ def create_ingress_cert_dr(
     # Restore the cluster context that was active before cert collection.
     config.switch_ctx(original_index)
 
+    # --- Early-exit: skip apply + MCP wait if every cluster already has the
+    # correct bundle and (when patch_proxy=True) proxy is already configured.
+    # This prevents redundant apply/MCP-rollout cycles on repeated test runs.
+    # Build a frozenset of the expected PEM blocks for order-independent comparison.
+    # Two bundles are considered identical when they contain the same set of certs
+    # regardless of the order they were written into the ConfigMap.
+    expected_cert_set = frozenset(ssl_data)
+    all_done = True
+    for cluster in config.clusters:
+        index = cluster.MULTICLUSTER["multicluster_index"]
+        cluster_name = cluster.MULTICLUSTER.get("name", f"Cluster-{index}")
+        if cluster.MULTICLUSTER.get("is_hosted", False):
+            continue
+        with config.RunWithConfigContext(index):
+            # Check whether the ConfigMap already contains exactly the same
+            # set of PEM blocks (order-independent).
+            try:
+                existing = ocp.OCP(
+                    kind=constants.CONFIGMAP,
+                    resource_name=cert_name,
+                    namespace=namespace,
+                ).get()
+                existing_raw = existing.get("data", {}).get("ca-bundle.crt", "")
+            except Exception:
+                existing_raw = ""
+
+            # Split the existing bundle into individual PEM blocks the same
+            # way Phase 2 does, then compare as sets.
+            existing_cert_set = set()
+            for pem_block in existing_raw.split("-----END CERTIFICATE-----"):
+                pem_block = pem_block.strip()
+                if pem_block:
+                    existing_cert_set.add(pem_block + "\n-----END CERTIFICATE-----\n")
+
+            if existing_cert_set != expected_cert_set:
+                logger.info(
+                    f"[{cluster_name}] ConfigMap '{cert_name}' missing or "
+                    "outdated — applying updated bundle"
+                )
+                all_done = False
+                break
+
+            if patch_proxy:
+                try:
+                    proxy_obj = ocp.OCP(kind="Proxy", resource_name="cluster").get()
+                    proxy_ca = (
+                        proxy_obj.get("spec", {}).get("trustedCA", {}).get("name", "")
+                    )
+                except Exception:
+                    proxy_ca = ""
+                if proxy_ca != cert_name:
+                    logger.info(
+                        f"[{cluster_name}] proxy/cluster not yet pointing at "
+                        f"'{cert_name}' — applying"
+                    )
+                    all_done = False
+                    break
+
+            logger.info(
+                f"[{cluster_name}] already has correct bundle and proxy config — "
+                "skipping apply"
+            )
+
+    if all_done:
+        logger.info(
+            "create_ingress_cert_dr: all clusters already up-to-date — skipping "
+            "apply and MCP wait"
+        )
+        return
+
     # --- Phase 3: apply ConfigMap and patch proxy on every non-hosted cluster -
     # The ConfigMap is applied on ALL clusters (not just the ones we collected
     # certs from) so that every cluster trusts the complete cross-cluster bundle.
@@ -3685,18 +3790,20 @@ def create_ingress_cert_dr(
     # roll it out to all nodes.  We must wait here before declaring success,
     # otherwise subsequent steps may run against nodes that have not yet
     # reloaded their trust store.
-    for cluster in config.clusters:
-        index = cluster.MULTICLUSTER["multicluster_index"]
-        cluster_name = cluster.MULTICLUSTER.get("name", f"Cluster-{index}")
-        is_hosted = cluster.MULTICLUSTER.get("is_hosted", False)
+    # Only wait when patch_proxy is True — no proxy patch means no MCO rollout.
+    if patch_proxy:
+        for cluster in config.clusters:
+            index = cluster.MULTICLUSTER["multicluster_index"]
+            cluster_name = cluster.MULTICLUSTER.get("name", f"Cluster-{index}")
+            is_hosted = cluster.MULTICLUSTER.get("is_hosted", False)
 
-        if not is_hosted:
-            with config.RunWithConfigContext(index):
-                logger.info(
-                    f"[{cluster_name}] Waiting for MachineConfigPool to finish "
-                    "rolling out the updated trust bundle"
-                )
-                wait_for_machineconfigpool_status(node_type="all")
+            if not is_hosted:
+                with config.RunWithConfigContext(index):
+                    logger.info(
+                        f"[{cluster_name}] Waiting for MachineConfigPool to finish "
+                        "rolling out the updated trust bundle"
+                    )
+                    wait_for_machineconfigpool_status(node_type="all")
 
 
 def create_multiclusterservice_dr():

@@ -3731,14 +3731,19 @@ class MultiClusterDROperatorsDeploy(object):
         # Update all the participating clusters in mirror_peer_yaml
         dr_cluster_relations = config.MULTICLUSTER.get("dr_cluster_relations", [])
         if dr_cluster_relations:
-            current_dr_clusters_list = [
-                (
-                    f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{item}"
-                    if is_hosted_cluster(cluster_name=item)
-                    else item
-                )
-                for item in dr_cluster_relations[0]
-            ]
+            current_dr_clusters_list = []
+            for item in dr_cluster_relations[0]:
+                try:
+                    idx = config.get_cluster_index_by_name(item)
+                    hosted = config.clusters[idx].MULTICLUSTER.get("is_hosted", False)
+                except Exception:
+                    hosted = False
+                if hosted:
+                    current_dr_clusters_list.append(
+                        f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{item}"
+                    )
+                else:
+                    current_dr_clusters_list.append(item)
         else:
             non_acm_clusters = get_non_acm_cluster_config()
             primary = get_primary_cluster_config()

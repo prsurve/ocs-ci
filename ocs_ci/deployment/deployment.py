@@ -4025,9 +4025,16 @@ class MultiClusterDROperatorsDeploy(object):
         dr_cluster_relations = config.MULTICLUSTER.get("dr_cluster_relations", [])
         primary_cluster_name = get_primary_cluster_config().ENV_DATA["cluster_name"]
         if dr_cluster_relations:
+            try:
+                idx = config.get_cluster_index_by_name(primary_cluster_name)
+                primary_is_hosted = config.clusters[idx].MULTICLUSTER.get(
+                    "is_hosted", False
+                )
+            except Exception:
+                primary_is_hosted = False
             primary_managed_cluster = (
                 f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{primary_cluster_name}"
-                if is_hosted_cluster(cluster_name=primary_cluster_name)
+                if primary_is_hosted
                 else primary_cluster_name
             )
         else:
@@ -4061,7 +4068,7 @@ class MultiClusterDROperatorsDeploy(object):
             if dr_cluster_relations:
                 secondary_managed_cluster = (
                     f"{constants.HYPERSHIFT_ADDON_DISCOVERYPREFIX}-{secondary_cluster_name}"
-                    if is_hosted_cluster(cluster_name=secondary_cluster_name)
+                    if cluster.MULTICLUSTER.get("is_hosted", False)
                     else secondary_cluster_name
                 )
             else:

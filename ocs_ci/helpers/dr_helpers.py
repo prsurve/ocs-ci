@@ -4048,7 +4048,7 @@ def create_gitops_private_repo_secret():
     )
     gitops_private_repo_secret["stringData"]["password"] = config.clusters[
         get_active_acm_index()
-    ].AUTH["github_ibm_odf_qe_ocs_workloads"]["gh_token"]
+    ].AUTH["ibm_hci"]["github_token"]
     gitops_private_repo_secret_yaml = tempfile.NamedTemporaryFile(
         mode="w+", prefix="gitops_private", delete=False
     )

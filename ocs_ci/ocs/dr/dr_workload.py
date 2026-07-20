@@ -45,7 +45,12 @@ from ocs_ci.ocs.utils import (
     get_non_acm_cluster_and_non_provider_cluster_config,
 )
 from ocs_ci.utility import templating
-from ocs_ci.utility.utils import clone_repo, run_cmd, TimeoutSampler
+from ocs_ci.utility.utils import (
+    clone_repo,
+    exec_cmd,
+    run_cmd,
+    TimeoutSampler,
+)  # IgnoreDeprecation
 
 log = logging.getLogger(__name__)
 
@@ -1207,6 +1212,7 @@ class CnvWorkload(DRWorkload):
             channel_yaml_data_load = list(
                 templating.load_yaml(self.channel_yaml_file, multi_document=True)
             )
+            cnv_sub_private_repo_secret = None
             for channel_yaml_data in channel_yaml_data_load:
                 if channel_yaml_data["kind"] == "Namespace":
                     channel_yaml_data["metadata"]["name"] = self.channel_namespace
@@ -1219,9 +1225,32 @@ class CnvWorkload(DRWorkload):
                         channel_yaml_data["spec"]["secretRef"][
                             "name"
                         ] = constants.PRIVATE_REPO_SUB_SECRET
-                        channel_yaml_data["spec"]["secretRef"][
+                        cnv_sub_private_repo_secret = templating.load_yaml(
+                            constants.PRIVATE_REPO_SUB_SECRET_YAML
+                        )
+                        cnv_sub_private_repo_secret["metadata"][
+                            "name"
+                        ] = constants.PRIVATE_REPO_SUB_SECRET
+                        cnv_sub_private_repo_secret["metadata"].setdefault(
+                            "annotations", {}
+                        )
+                        cnv_sub_private_repo_secret["metadata"].setdefault("labels", {})
+                        cnv_sub_private_repo_secret["metadata"]["annotations"][
+                            "apps.open-cluster-management.io/serving-channel"
+                        ] = f"{self.channel_namespace}/{self.channel_name}"
+                        cnv_sub_private_repo_secret["metadata"][
                             "namespace"
-                        ] = constants.DEFAULT_NAMESPACE
+                        ] = self.channel_namespace
+                        cnv_sub_private_repo_secret["metadata"]["labels"][
+                            "apps.open-cluster-management.io/serving-channel"
+                        ] = "true"
+                        cnv_sub_private_repo_secret["data"]["accessToken"] = (
+                            base64.b64encode(
+                                config.clusters[get_active_acm_index()]
+                                .AUTH["ibm_hci"]["github_token"]
+                                .encode()
+                            ).decode()
+                        )
                 templating.dump_data_to_temp_yaml(
                     channel_yaml_data_load, self.channel_yaml_file
                 )
@@ -1305,6 +1334,14 @@ class CnvWorkload(DRWorkload):
         )
         config.switch_acm_ctx()
         if self.workload_type == constants.SUBSCRIPTION:
+            if cnv_sub_private_repo_secret:
+                cnv_sub_secret_yaml = tempfile.NamedTemporaryFile(
+                    mode="w+", prefix="cnv_sub_secret", delete=False
+                )
+                templating.dump_data_to_temp_yaml(
+                    cnv_sub_private_repo_secret, cnv_sub_secret_yaml.name
+                )
+                exec_cmd(f"oc create -f {cnv_sub_secret_yaml.name}")
             run_cmd(f"oc create -f {self.channel_yaml_file}")
         run_cmd(f"oc create -f {self.cnv_workload_yaml_file}")
         self.check_pod_pvc_status(skip_replication_resources=True)

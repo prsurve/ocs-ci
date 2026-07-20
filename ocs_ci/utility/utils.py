@@ -7731,10 +7731,11 @@ def genereate_cred_file_rack():
     # Any rackIP corrections discovered are applied to rack_dict and persisted
     # back to the primary JSON file before the backup is written, so the backup
     # always reflects the final corrected rackIP values.
-    rack_dict = _verify_bmc_connectivity_rack(
-        rack_dict=rack_dict,
-        file_path=str(file_path),
-    )
+    if not config.ENV_DATA.get("skip_bmc_verification"):
+        rack_dict = _verify_bmc_connectivity_rack(
+            rack_dict=rack_dict,
+            file_path=str(file_path),
+        )
 
     # Save a timestamped backup copy in home directory — written after ping
     # verification so the backup contains any corrected rackIP values.

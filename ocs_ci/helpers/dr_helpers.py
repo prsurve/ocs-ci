@@ -2,6 +2,7 @@
 Helper functions specific for DR
 """
 
+import base64
 import json
 import logging
 import os
@@ -75,6 +76,7 @@ from ocs_ci.utility.utils import (
     wait_for_machineconfigpool_status,
 )
 from ocs_ci.helpers.helpers import (
+    create_resource,
     run_cmd_verify_cli_output,
     find_cephblockpoolradosnamespace,
     find_cephfilesystemsubvolumegroup,
@@ -4207,3 +4209,226 @@ def extract_images_from_yaml(obj, images=None):
             extract_images_from_yaml(item, images)
 
     return images
+
+
+def get_cdi_registry_credentials():
+    """
+    Extract the username and password for the internal mirror registry from
+    the cluster's global pull secret (``secret/pull-secret`` in
+    ``openshift-config``).
+
+    The pull-secret ``auths`` map may contain multiple entries keyed by
+    registry hostname or hostname/path.  We match on the bare hostname from
+    ``config.DEPLOYMENT["mirror_registry"]`` — the first entry whose key
+    equals that hostname exactly is preferred; if not found we fall back to
+    any entry whose key starts with that hostname (sub-repo paths).
+
+    Each auth entry may carry explicit ``username`` / ``password`` fields, or
+    only an ``auth`` field which is ``base64(username:password)``.  Both forms
+    are handled.
+
+    Returns:
+        tuple[str, str]: ``(username, password)`` as plain strings.
+
+    Raises:
+        CommandFailed: If the ``oc`` call fails.
+        KeyError: If no entry for the mirror registry is found in the secret.
+        ValueError: If the ``auth`` field cannot be decoded into ``user:pass``.
+    """
+    mirror_host = config.DEPLOYMENT["mirror_registry"].rstrip("/")
+
+    raw_b64 = (
+        exec_cmd(
+            f"oc get secret pull-secret -n {constants.OPENSHIFT_CONFIG_NAMESPACE}"
+            r" -o jsonpath='{.data.\.dockerconfigjson}'"
+        )
+        .stdout.decode()
+        .strip()
+    )
+    auths = json.loads(base64.b64decode(raw_b64)).get("auths", {})
+
+    # Prefer an exact-hostname match (e.g. "r8-ru26-w-l.quay-service.fusion.tadn.ibm.com")
+    # over sub-repo entries (e.g. "r8-.../mirror-automation-.../hci/...").
+    entry = auths.get(mirror_host) or next(
+        (v for k, v in auths.items() if k.startswith(mirror_host)),
+        None,
+    )
+    if entry is None:
+        raise KeyError(
+            f"No pull-secret entry found for mirror registry '{mirror_host}'. "
+            f"Available hosts: {list(auths.keys())}"
+        )
+
+    username = entry.get("username")
+    password = entry.get("password")
+    if not username or not password:
+        # Decode "auth": base64("username:password")
+        auth_decoded = base64.b64decode(entry["auth"]).decode()
+        if ":" not in auth_decoded:
+            raise ValueError(
+                f"Cannot parse 'auth' field for '{mirror_host}': "
+                f"expected 'user:password', got '{auth_decoded}'"
+            )
+        username, password = auth_decoded.split(":", 1)
+
+    logger.debug(
+        f"Extracted CDI registry credentials for '{mirror_host}': " f"user='{username}'"
+    )
+    return username, password
+
+
+def create_cdi_pull_secret(namespace, secret_name="quayadmin"):
+    """
+    Create an Opaque Secret in *namespace* so CDI can authenticate against
+    the internal mirror registry when importing VM disk images.
+
+    CDI's ``spec.source.registry.secretRef`` expects an Opaque secret with
+    two keys:
+
+    * ``accessKeyId`` — registry username (base64-encoded)
+    * ``secretKey``   — registry password (base64-encoded)
+
+    The credentials are derived automatically from the cluster's existing
+    ``secret/pull-secret`` in ``openshift-config`` — no manual credential
+    management is required.
+
+    The secret name must match the ``secretRef`` value in the workload YAML
+    files (default: ``quayadmin``).
+
+    This function is idempotent — it deletes an existing secret before
+    re-creating it.
+
+    Args:
+        namespace (str): Workload namespace where the secret is created.
+        secret_name (str): Name to give the Secret.  Defaults to
+            ``quayadmin`` to match the workload YAML ``secretRef``.
+    """
+    secret_ocp = ocp.OCP(kind=constants.SECRET, namespace=namespace)
+
+    if secret_ocp.is_exist(resource_name=secret_name):
+        logger.info(
+            f"CDI pull secret '{secret_name}' already exists in "
+            f"'{namespace}', recreating."
+        )
+        secret_ocp.delete(resource_name=secret_name, wait=True)
+
+    mirror_host = config.DEPLOYMENT.get("mirror_registry")
+    logger.info(
+        f"Creating CDI registry secret '{secret_name}' in namespace "
+        f"'{namespace}' (mirror registry: {mirror_host})"
+    )
+    username, password = get_cdi_registry_credentials()
+    secret_manifest = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": secret_name, "namespace": namespace},
+        "type": "Opaque",
+        "data": {
+            "accessKeyId": base64.b64encode(username.encode()).decode(),
+            "secretKey": base64.b64encode(password.encode()).decode(),
+        },
+    }
+    create_resource(**secret_manifest)
+    logger.info(
+        f"CDI registry secret '{secret_name}' created in namespace '{namespace}'"
+    )
+
+
+def fetch_mirror_registry_cert():
+    """
+    Fetch the TLS certificate presented by ``config.DEPLOYMENT["mirror_registry"]``
+    using ``openssl s_client``.
+
+    The mirror registry is stored as a bare hostname (and optional port), e.g.
+    ``r8-ru26-w-l.quay-service.fusion.tadn.ibm.com`` or
+    ``r8-ru26-w-l.quay-service.fusion.tadn.ibm.com:8443``.  Port 443 is
+    assumed when none is specified.
+
+    Returns:
+        str: PEM-encoded certificate string (includes trailing newline).
+
+    Raises:
+        CommandFailed: If ``openssl`` is not available or the connection fails.
+        ValueError: If the output contains no PEM certificate block.
+    """
+    mirror_registry = config.DEPLOYMENT["mirror_registry"].rstrip("/")
+
+    # Split off an explicit port; default to 443.
+    if ":" in mirror_registry:
+        host, port = mirror_registry.rsplit(":", 1)
+    else:
+        host, port = mirror_registry, "443"
+
+    endpoint = f"{host}:{port}"
+    logger.info(
+        f"Fetching TLS certificate from mirror registry '{endpoint}' "
+        f"via openssl s_client"
+    )
+    cmd = (
+        f"echo | openssl s_client -connect {endpoint} -showcerts 2>/dev/null"
+        f" | openssl x509 -outform PEM"
+    )
+    result = exec_cmd(cmd, shell=True)
+    pem = result.stdout.decode().strip()
+
+    if "BEGIN CERTIFICATE" not in pem:
+        raise ValueError(
+            f"openssl s_client returned no PEM certificate for '{endpoint}'. "
+            f"Output: {pem!r}"
+        )
+
+    if not pem.endswith("\n"):
+        pem += "\n"
+
+    logger.debug(f"Successfully fetched TLS certificate for '{endpoint}'")
+    return pem
+
+
+def create_cdi_cert_configmap(namespace, configmap_name="user-ca-bundle"):
+    """
+    Create a ConfigMap in *namespace* containing the TLS CA certificate of
+    ``config.DEPLOYMENT["mirror_registry"]``, so CDI can verify the registry's
+    TLS certificate when importing VM disk images in a disconnected environment.
+
+    CDI's ``spec.source.registry.certConfigMap`` is namespace-scoped — it must
+    exist in the **same namespace** as the DataVolume / VolumeImportSource.
+    The certificate is fetched live from the registry endpoint via
+    ``openssl s_client``, so no manual cert management is required.
+
+    The ConfigMap name must match the ``certConfigMap`` value in the workload
+    YAML files (default: ``user-ca-bundle``).
+
+    This function is idempotent — it deletes an existing ConfigMap before
+    re-creating it.
+
+    Args:
+        namespace (str): Workload namespace where the ConfigMap is created.
+        configmap_name (str): Name to give the ConfigMap.  Defaults to
+            ``user-ca-bundle`` to match the workload YAML ``certConfigMap``.
+    """
+    cm_ocp = ocp.OCP(kind=constants.CONFIGMAP, namespace=namespace)
+
+    if cm_ocp.is_exist(resource_name=configmap_name):
+        logger.info(
+            f"CDI cert ConfigMap '{configmap_name}' already exists in "
+            f"'{namespace}', recreating."
+        )
+        cm_ocp.delete(resource_name=configmap_name, wait=True)
+
+    mirror_registry = config.DEPLOYMENT.get("mirror_registry")
+    logger.info(
+        f"Creating CDI cert ConfigMap '{configmap_name}' in namespace "
+        f"'{namespace}' (mirror registry: {mirror_registry})"
+    )
+    ca_bundle = fetch_mirror_registry_cert()
+
+    cm_manifest = {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": configmap_name, "namespace": namespace},
+        "data": {"ca-bundle.crt": ca_bundle},
+    }
+    create_resource(**cm_manifest)
+    logger.info(
+        f"CDI cert ConfigMap '{configmap_name}' created in namespace '{namespace}'"
+    )

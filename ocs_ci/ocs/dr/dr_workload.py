@@ -1496,6 +1496,14 @@ class CnvWorkload(DRWorkload):
                 if "(AlreadyExists)" in str(ex):
                     log.warning("The namespace already exists!")
 
+            # In disconnected environments the workload YAML files reference
+            # an internal Quay registry via ``secretRef: quayadmin`` and
+            # ``certConfigMap: user-ca-bundle``.  Both resources must exist in
+            # the workload namespace before the subscription deploys the workload.
+            if config.DEPLOYMENT.get("disconnected"):
+                create_cdi_pull_secret(namespace=self.workload_namespace)
+                create_cdi_cert_configmap(namespace=self.workload_namespace)
+
             # Create or recreate the secret for ssh access
             try:
                 log.info(

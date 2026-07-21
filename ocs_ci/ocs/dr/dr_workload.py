@@ -1276,6 +1276,19 @@ class CnvWorkload(DRWorkload):
                     "namespace"
                 ] = self.workload_namespace
 
+                # Update repoURL and targetRevision to use the configured repo
+                # (internal mirror in disconnected environments).
+                template_spec = cnv_workload_yaml_data["spec"]["template"]["spec"]
+                if "source" in template_spec:
+                    template_spec["source"]["repoURL"] = self.workload_repo_url
+                    template_spec["source"][
+                        "targetRevision"
+                    ] = self.workload_repo_branch
+                if "sources" in template_spec:
+                    for src in template_spec["sources"]:
+                        src["repoURL"] = self.workload_repo_url
+                        src["targetRevision"] = self.workload_repo_branch
+
                 # Change the AppSet placement label
                 for generator in cnv_workload_yaml_data["spec"]["generators"]:
                     if (

@@ -1879,17 +1879,15 @@ acm_configuration_4_22 = {
         By.XPATH,
     ),
     "next-btn": (
-        "//button[contains(@class,'pf-v6-c-button') and contains(@class,'pf-m-primary')]",
+        "//button[@type='submit'][not(@disabled)]",
         By.XPATH,
     ),
     "install-btn": (
-        "//button[contains(@class,'pf-v6-c-button')"
-        " and contains(@class,'pf-m-primary')"
-        " and contains(@class,'pf-m-progress')]",
+        "//button[normalize-space()='Install']",
         By.XPATH,
     ),
     "cluster-set-status": (
-        "//span[contains(@class,'pf-v6-c-modal-box__title-text')]",
+        "//div[@role='dialog']//h2[normalize-space()]",
         By.XPATH,
     ),
     "click-manage-resource-assignments": (
@@ -1897,7 +1895,7 @@ acm_configuration_4_22 = {
         By.XPATH,
     ),
     "search-cluster": (
-        "//input[contains(@class,'pf-v6-c-text-input-group__text-input')]",
+        "//input[@placeholder='Find by name']",
         By.XPATH,
     ),
     "clear-search": ("//button[@aria-label='Reset']", By.XPATH),
@@ -1906,7 +1904,7 @@ acm_configuration_4_22 = {
         By.XPATH,
     ),
     "target-clusters": (
-        "//input[contains(@class,'pf-v6-c-text-input-group__text-input')][@role='combobox' or @aria-label]",
+        "//input[@placeholder='Select clusters']",
         By.XPATH,
     ),
     "select-cluster-checkbox": (

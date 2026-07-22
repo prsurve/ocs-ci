@@ -1855,138 +1855,93 @@ acm_configuration_4_21 = {
 
 acm_configuration_4_22 = {
     "all-clusters_dropdown": (
-        "//a[normalize-space()='All Clusters'] | "
-        "//span[contains(@class, 'c-menu-toggle__text') and normalize-space()='All Clusters']/.. | "
         "//button[@data-test-id='perspective-switcher-toggle']",
         By.XPATH,
     ),
     "local-cluster_dropdown_item": (
-        "//span[contains(@class, 'c-menu__item-text') and text()='local-cluster']/.. | "
-        "//h2[normalize-space()='Administrator'] | "
         "//button[@data-test-id='perspective-switcher-toggle']//*[normalize-space()='local-cluster']",
         By.XPATH,
     ),
     "local-cluster_dropdown": (
-        "//h2[text()='local-cluster'] | "
-        "//span[contains(@class, 'c-menu-toggle__text') and text()='local-cluster']/.. | "
-        "//h2[normalize-space()='Fleet Management'] | "
-        "//h2[normalize-space()='Core platform'] | "
         "//h2[normalize-space()='Administrator']",
         By.XPATH,
     ),
     "click-local-cluster": (
-        '//button[@data-test-id="cluster-dropdown-toggle"]//*[text()="local-cluster"] | '
         '//td[@data-label="Name"]//span[text()="local-cluster"]',
         By.XPATH,
     ),
     "all-clusters-view": (
-        "//span[contains(text(),'All Clusters')] | "
-        "//button[@data-test-id='perspective-switcher-toggle'] | "
         "//nav[@aria-label='Breadcrumb']//a[contains(@href,'/multicloud/infrastructure/clusters')]",
         By.XPATH,
     ),
     "cluster-set-name": (
-        "//input[@id='clusterSetName'] | "
-        "//input[@placeholder='Enter cluster set name'] | "
-        "//input[@aria-label='cluster set name' or "
-        "@aria-label='Cluster set name' or "
-        "@aria-label='Enter cluster set name'] | "
-        "//*[contains(@class,'modal') or contains(@class,'Modal')]"
-        "//input[@type='text']",
+        "//input[@id='clusterSetName']",
         By.XPATH,
     ),
     "next-btn": (
-        "//button[contains(@class,'pf-v6-c-button') and contains(@class,'pf-m-primary')] | "
-        "//button[contains(@class,'pf-v5-c-button') and contains(@class,'pf-m-primary')] | "
-        "//button[contains(@class,'c-button') and contains(@class,'-m-primary')]",
+        "//button[contains(@class,'pf-v6-c-button') and contains(@class,'pf-m-primary')]",
         By.XPATH,
     ),
-    # OCP 4.22 PF6: same class rename for the final Install button.
     "install-btn": (
         "//button[contains(@class,'pf-v6-c-button')"
         " and contains(@class,'pf-m-primary')"
-        " and contains(@class,'pf-m-progress')] | "
-        "//button[contains(@class,'pf-v5-c-button')"
-        " and contains(@class,'pf-m-primary')"
-        " and contains(@class,'pf-m-progress')] | "
-        "//button[contains(@class,'c-button')"
-        " and contains(@class,'m-primary')"
-        " and contains(@class,'m-progress')]",
+        " and contains(@class,'pf-m-progress')]",
         By.XPATH,
     ),
     "cluster-set-status": (
-        "//span[contains(@class,'pf-v6-c-modal-box__title-text')] | "
-        "//span[contains(@class,'c-modal-box__title-text')]",
+        "//span[contains(@class,'pf-v6-c-modal-box__title-text')]",
         By.XPATH,
     ),
     "click-manage-resource-assignments": (
-        "//button[normalize-space()='Manage resource assignments'] | "
         "//button[.//*[normalize-space()='Manage resource assignments']]",
         By.XPATH,
     ),
     "search-cluster": (
-        "//input[@placeholder='Find by name'] | "
-        "//input[@placeholder='Search'] | "
-        "//input[contains(@class,'pf-v6-c-text-input-group__text-input')] | "
-        "//input[contains(@class,'c-text-input-group__text-input')]",
+        "//input[contains(@class,'pf-v6-c-text-input-group__text-input')]",
         By.XPATH,
     ),
     "clear-search": ("//button[@aria-label='Reset']", By.XPATH),
     "submariner-tab": (
-        "//a[normalize-space()='Submariner add-ons'] | "
-        "//a[.//*[normalize-space()='Submariner add-ons']] | "
         "//button[.//*[normalize-space()='Submariner add-ons']]",
         By.XPATH,
     ),
     "target-clusters": (
-        "//input[@placeholder='Select clusters'] | "
-        "//input[@placeholder='Select a cluster'] | "
-        "//input[contains(@class,'pf-v6-c-combo-box') or "
-        "contains(@class,'pf-v6-c-text-input-group__text-input')]"
-        "[@role='combobox' or @aria-label]",
+        "//input[contains(@class,'pf-v6-c-text-input-group__text-input')][@role='combobox' or @aria-label]",
         By.XPATH,
     ),
     "select-cluster-checkbox": (
-        "//tr[.//td[@data-label='Name' and normalize-space()='{0}']]//input[@type='checkbox'] | "
         "//tr[.//td[@data-label='Name']//*[normalize-space()='{0}']]//input[@type='checkbox']",
         By.XPATH,
     ),
     "cluster-name-selection": (
-        "//button[normalize-space()='{0}'] | "
         "//button[.//*[normalize-space()='{0}']]",
         By.XPATH,
     ),
     "gateway-count-btn": (
-        "//button[@aria-label='Plus'] | " "//button[@aria-label='Increment']",
+        "//button[@aria-label='Increment']",
         By.XPATH,
     ),
     "connection-status-1": (
-        "(//button[@type='button'][normalize-space()='Healthy'])[1] | "
         "(//button[@type='button'][.//*[normalize-space()='Healthy']])[1]",
         By.XPATH,
     ),
     "connection-status-2": (
-        "(//button[@type='button'][normalize-space()='Healthy'])[3] | "
         "(//button[@type='button'][.//*[normalize-space()='Healthy']])[3]",
         By.XPATH,
     ),
     "agent-status-1": (
-        "(//button[@type='button'][normalize-space()='Healthy'])[2] | "
         "(//button[@type='button'][.//*[normalize-space()='Healthy']])[2]",
         By.XPATH,
     ),
     "agent-status-2": (
-        "(//button[@type='button'][normalize-space()='Healthy'])[4] | "
         "(//button[@type='button'][.//*[normalize-space()='Healthy']])[4]",
         By.XPATH,
     ),
     "node-label-1": (
-        "(//button[@type='button'][normalize-space()='Nodes labeled'])[1] | "
         "(//button[@type='button'][.//*[normalize-space()='Nodes labeled']])[1]",
         By.XPATH,
     ),
     "node-label-2": (
-        "(//button[@type='button'][normalize-space()='Nodes labeled'])[2] | "
         "(//button[@type='button'][.//*[normalize-space()='Nodes labeled']])[2]",
         By.XPATH,
     ),

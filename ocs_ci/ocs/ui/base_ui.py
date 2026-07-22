@@ -848,7 +848,7 @@ class BaseUI:
                         pass
             return False
 
-    def check_element_presence(self, locator, timeout=5, use_fallback=True, use_fallback=True):
+    def check_element_presence(self, locator, timeout=5, use_fallback=True):
         """
         Check if an web element is present on the web console or not.
 

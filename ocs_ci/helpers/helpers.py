@@ -7011,26 +7011,18 @@ def find_cephblockpoolradosnamespace(storageclient_uid=None):
         storageclient_uid = clients_info[0]["metadata"]["uid"]
         storageclient_name = clients_info[0]["metadata"]["name"]
 
-    # StorageConsumer lives on the provider cluster, not the client/hosted cluster.
-    # Use RunWithProviderConfigContextIfAvailable so this works correctly when
-    # called in the context of a hosted (HCP) client cluster.
-    with config.RunWithProviderConfigContextIfAvailable():
-        storageconsumer_obj = ocp.OCP(
-            kind=constants.STORAGECONSUMER,
-            namespace=config.ENV_DATA["cluster_namespace"],
-        )
-        for storageconsumer_dict in storageconsumer_obj.get()["items"]:
-            if (
-                storageconsumer_dict["status"]["client"]["clientId"]
-                == storageclient_uid
-            ):
-                storageconsumer = storageconsumer_dict["metadata"]["name"]
-                # TODO: Use configmap with name storageconsumer_dict["status"]["resourceNameMappingConfigMap"]
-                # ["name"] to identify the radosnamespace and then use it to find the
-                # cephblockpoolradosnamespace CR. This is not
-                #  applicable for internal storageconsumer because the configmap will not have the exact name of
-                #  radosnamespace
-                break
+    storageconsumer_obj = ocp.OCP(
+        kind=constants.STORAGECONSUMER,
+        namespace=config.ENV_DATA["cluster_namespace"],
+    )
+    for storageconsumer_dict in storageconsumer_obj.get()["items"]:
+        if storageconsumer_dict["status"]["client"]["clientId"] == storageclient_uid:
+            storageconsumer = storageconsumer_dict["metadata"]["name"]
+            # TODO: Use configmap with name storageconsumer_dict["status"]["resourceNameMappingConfigMap"]["name"] to
+            #  identify the radosnamespace and then use it to find the cephblockpoolradosnamespace CR. This is not
+            #  applicable for internal storageconsumer because the configmap will not have the exact name of
+            #  radosnamespace
+            break
 
     with config.RunWithProviderConfigContextIfAvailable():
         cephblockpool_rns_names = [

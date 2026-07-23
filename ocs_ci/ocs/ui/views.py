@@ -1879,7 +1879,7 @@ acm_configuration_4_22 = {
         By.XPATH,
     ),
     "next-btn": (
-        "//button[@type='submit'][not(@disabled)]",
+        "//button[span[normalize-space()='Next']]",
         By.XPATH,
     ),
     "install-btn": (
@@ -1895,7 +1895,7 @@ acm_configuration_4_22 = {
         By.XPATH,
     ),
     "search-cluster": (
-        "//input[@placeholder='Find by name']",
+        "//input[@aria-label='Search input']",
         By.XPATH,
     ),
     "clear-search": ("//button[@aria-label='Reset']", By.XPATH),
@@ -1916,7 +1916,7 @@ acm_configuration_4_22 = {
         By.XPATH,
     ),
     "gateway-count-btn": (
-        "//button[@aria-label='Increment']",
+        "//div[@id='gateways']//button[@aria-label='Plus']",
         By.XPATH,
     ),
     "connection-status-1": (

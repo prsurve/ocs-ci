@@ -474,36 +474,30 @@ def check_mirroring_status_ok(
         if not cephbpradosns:
             raise NotFoundError("Couldn't identify the cephblockpoolradosnamespace")
 
-        # All CephBlockPoolRadosNamespace resources live on the provider cluster.
-        # Use RunWithProviderConfigContextIfAvailable so this works correctly when
-        # called in the context of a hosted (HCP) client cluster that has no
-        # cephblockpoolradosnamespaces CRD.
-        with config.RunWithProviderConfigContextIfAvailable():
-            if (
-                "ocs-storagecluster-cephblockpool" not in cephbpradosns
-                and "replicated-metadata-pool" not in cephbpradosns
-            ):
-                cephblockpool_rns_names = [
-                    cephbprns_data["metadata"]["name"]
-                    for cephbprns_data in ocp.OCP(
-                        kind=constants.CEPHBLOCKPOOLRADOSNS,
-                        namespace=config.ENV_DATA["cluster_namespace"],
-                    ).get()["items"]
-                ]
-                cephbpradosns = list(
-                    filter(lambda x: f"-{cephbpradosns}" in x, cephblockpool_rns_names)
-                )[0]
+        if (
+            "ocs-storagecluster-cephblockpool" not in cephbpradosns
+            and "replicated-metadata-pool" not in cephbpradosns
+        ):
+            cephblockpool_rns_names = [
+                cephbprns_data["metadata"]["name"]
+                for cephbprns_data in ocp.OCP(
+                    kind=constants.CEPHBLOCKPOOLRADOSNS,
+                    namespace=config.ENV_DATA["cluster_namespace"],
+                ).get()["items"]
+            ]
+            cephbpradosns = list(
+                filter(lambda x: f"-{cephbpradosns}" in x, cephblockpool_rns_names)
+            )[0]
 
-            logger.info(f"Got cephblockpoolradosnamespace {cephbpradosns}")
+        logger.info(f"Got cephblockpoolradosnamespace {cephbpradosns}")
 
-            cbp_obj = ocp.OCP(
-                kind=constants.CEPHBLOCKPOOLRADOSNS,
-                namespace=config.ENV_DATA["cluster_namespace"],
-                resource_name=cephbpradosns,
-            )
-            mirroring_status = (
-                cbp_obj.get().get("status").get("mirroringStatus").get("summary")
-            )
+        cbp_obj = ocp.OCP(
+            kind=constants.CEPHBLOCKPOOLRADOSNS,
+            namespace=config.clusters[config.get_provider_index()].ENV_DATA[
+                "cluster_namespace"
+            ],
+            resource_name=cephbpradosns,
+        )
     else:
         if ocs_version >= version.VERSION_4_19:
             # The name of builtin-implicit cephblockpoolradosnamespace is different in EC cluster and non EC cluster
@@ -529,9 +523,7 @@ def check_mirroring_status_ok(
                 namespace=config.ENV_DATA["cluster_namespace"],
             )
 
-        mirroring_status = (
-            cbp_obj.get().get("status").get("mirroringStatus").get("summary")
-        )
+    mirroring_status = cbp_obj.get().get("status").get("mirroringStatus").get("summary")
     logger.info(f"Mirroring status: {mirroring_status}")
 
     health_keys = ["daemon_health", "health", "image_health"]

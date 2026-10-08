@@ -1,0 +1,101 @@
+name: RDR PR Dashboard
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+# • Scheduled: every day at 07:00 UTC (good morning refresh for the team)
+# • Manual:    run anytime from Actions → "Run workflow"
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      state:
+        description: "PR state to include"
+        required: false
+        default: "open"
+        type: choice
+        options:
+          - open
+          - all
+          - closed
+
+# Allow this workflow to write to GitHub Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    name: Generate RDR Dashboard
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ───────────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. Install only what the agent needs ─────────────────────────────────
+      - name: Install dependencies
+        run: pip install requests
+
+      # ── 4. Generate the HTML report ──────────────────────────────────────────
+      # --no-checks  skips one extra API call per PR (check-runs); keeps the
+      # workflow inside GitHub's unauthenticated rate limit for small repos,
+      # but the GITHUB_TOKEN below gives 5000 req/h so checks ARE fetched.
+      - name: Generate RDR PR report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python ocs_ci/ocs/dr/dr_github_agent.py \
+            --state ${{ github.event.inputs.state || 'open' }} \
+            --html /tmp/index.html
+          echo "Report generated."
+          # Show a quick count in the workflow log
+          python - <<'EOF'
+          import json, subprocess, os
+          result = subprocess.run(
+              ["python", "ocs_ci/ocs/dr/dr_github_agent.py",
+               "--state", os.environ.get("INPUT_STATE", "open"),
+               "--json", "--no-checks"],
+              capture_output=True, text=True,
+              env={**os.environ}
+          )
+          if result.returncode == 0:
+              prs = json.loads(result.stdout)
+              print(f"::notice::RDR dashboard: {len(prs)} PR(s) included.")
+          EOF
+
+      # ── 5. Add a minimal index wrapper so the Pages root works ───────────────
+      - name: Prepare Pages directory
+        run: |
+          mkdir -p /tmp/pages
+          cp /tmp/index.html /tmp/pages/index.html
+          # Write a tiny _config.yml so Jekyll doesn't process the file
+          echo "theme: ~" > /tmp/pages/_config.yml
+          # Stamp the build time into a metadata file for debugging
+          echo "Built: $(date -u '+%Y-%m-%d %H:%M UTC')" > /tmp/pages/build.txt
+
+      # ── 6. Deploy to GitHub Pages ─────────────────────────────────────────────
+      # Pushes /tmp/pages to the gh-pages branch (creates it if it doesn't exist).
+      # GitHub Pages will serve it at:
+      #   https://<org>.github.io/<repo>/
+      # e.g. https://red-hat-storage.github.io/ocs-ci/
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: /tmp/pages
+          publish_branch: gh-pages
+          destination_dir: rdr-dashboard
+          commit_message: "chore: update RDR PR dashboard [skip ci]"
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          # Keep previous deploys; only overwrite rdr-dashboard/
+          keep_files: true

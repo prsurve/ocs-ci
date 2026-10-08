@@ -31,8 +31,13 @@ jobs:
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
+      # submodules: false  — the repo has a dangling gitlink (src/ocp-network-split)
+      # with no matching .gitmodules entry; fetching submodules would fail.
+      # The dashboard only needs the Python source files, not any submodule.
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
       # ── 2. Python setup ───────────────────────────────────────────────────────
       - name: Set up Python
